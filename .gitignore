@@ -3,3 +3,5 @@
 __pycache__/
 *.pyc
 work/processed_mails.txt
+client_secret_google.json
+token_google_sheets.json

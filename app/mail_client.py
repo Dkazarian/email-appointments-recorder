@@ -15,6 +15,9 @@ class MailItem:
     uid: str
     subject: str
     sender: str
+    reply_to: str
+    message_id: str
+    references: str
     body: str
 
 
@@ -24,15 +27,33 @@ class MailClient:
         self._imap: imaplib.IMAP4_SSL | None = None
 
     def __enter__(self) -> "MailClient":
-        self._imap = imaplib.IMAP4_SSL(self.settings.imap_host, self.settings.imap_port)
-        self._imap.login(self.settings.imap_user, self.settings.imap_password)
-        self._imap.select(self.settings.imap_folder)
+        self._connect()
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
-        if self._imap:
+        self._disconnect()
+
+    def _connect(self) -> None:
+        self._imap = imaplib.IMAP4_SSL(self.settings.imap_host, self.settings.imap_port)
+        self._imap.login(self.settings.imap_user, self.settings.imap_password)
+        self._imap.select(self.settings.imap_folder)
+
+    def _disconnect(self) -> None:
+        if not self._imap:
+            return
+        try:
             self._imap.close()
+        except imaplib.IMAP4.error:
+            pass
+        try:
             self._imap.logout()
+        except imaplib.IMAP4.error:
+            pass
+        self._imap = None
+
+    def reconnect(self) -> None:
+        self._disconnect()
+        self._connect()
 
     def fetch(self, limit: int) -> list[MailItem]:
         imap = self._require_imap()
@@ -54,6 +75,9 @@ class MailClient:
                     uid=uid,
                     subject=_decode_mime_header(msg.get("Subject", "")),
                     sender=parseaddr(msg.get("From", ""))[1],
+                    reply_to=parseaddr(msg.get("Reply-To") or msg.get("From", ""))[1],
+                    message_id=msg.get("Message-ID", ""),
+                    references=msg.get("References", ""),
                     body=_extract_body(msg),
                 )
             )
@@ -63,6 +87,15 @@ class MailClient:
         self._require_imap().uid("store", uid, "+FLAGS", r"(\Seen)")
 
     def move(self, uid: str, folder: str) -> None:
+        try:
+            self._move_once(uid, folder)
+        except (imaplib.IMAP4.abort, RuntimeError) as exc:
+            if not _is_retriable_imap_error(exc):
+                raise
+            self.reconnect()
+            self._move_once(uid, folder)
+
+    def _move_once(self, uid: str, folder: str) -> None:
         imap = self._require_imap()
         self.ensure_folder(folder)
 
@@ -140,6 +173,11 @@ def _html_to_text(html: str) -> str:
     parser = _TextHTMLParser()
     parser.feed(html)
     return parser.text
+
+
+def _is_retriable_imap_error(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return "server shutting down" in text or "socket error" in text or "connection" in text or "abort" in text
 
 
 class _TextHTMLParser(HTMLParser):

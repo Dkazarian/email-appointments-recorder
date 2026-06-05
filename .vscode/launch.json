@@ -2,7 +2,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Procesador: Dry run una vez",
+            "name": "Procesador: sin persistencia",
             "type": "debugpy",
             "request": "launch",
             "module": "app.main",
@@ -11,25 +11,6 @@
             "python": "${workspaceFolder}/.venv/Scripts/python.exe",
             "console": "integratedTerminal",
             "args": [
-                "--dry-run",
-                "--limit",
-                "5"
-            ]
-        },
-        {
-            "name": "Procesador: Dry run cada 2 minutos",
-            "type": "debugpy",
-            "request": "launch",
-            "module": "app.main",
-            "cwd": "${workspaceFolder}",
-            "envFile": "${workspaceFolder}/.env",
-            "python": "${workspaceFolder}/.venv/Scripts/python.exe",
-            "console": "integratedTerminal",
-            "args": [
-                "--dry-run",
-                "--watch",
-                "--interval-minutes",
-                "2",
                 "--limit",
                 "5"
             ]
@@ -45,6 +26,39 @@
             "console": "integratedTerminal",
             "args": [
                 "--output-txt",
+                "--limit",
+                "5"
+            ]
+        },
+        {
+            "name": "Procesador: Google Sheets una vez",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "app.main",
+            "cwd": "${workspaceFolder}",
+            "envFile": "${workspaceFolder}/.env",
+            "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+            "console": "integratedTerminal",
+            "args": [
+                "--output-gsheets",
+                "--limit",
+                "5"
+            ]
+        },
+        {
+            "name": "Procesador: Google Sheets cada 2 minutos",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "app.main",
+            "cwd": "${workspaceFolder}",
+            "envFile": "${workspaceFolder}/.env",
+            "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+            "console": "integratedTerminal",
+            "args": [
+                "--output-gsheets",
+                "--watch",
+                "--interval-minutes",
+                "2",
                 "--limit",
                 "5"
             ]

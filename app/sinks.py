@@ -16,13 +16,13 @@ class NoopSink:
         return "no persistido"
 
 
-def build_sink(settings: Settings, output_txt: str | None, dry_run: bool) -> ResultSink:
-    if dry_run:
-        return NoopSink()
+def build_sink(settings: Settings, output_txt: str | None, gsheets_output: bool) -> ResultSink:
     if output_txt is not None:
         txt_path = output_txt or settings.txt_output_path
         return TextSink(txt_path)
-    return build_sheets_sink(settings)
+    if gsheets_output:
+        return build_sheets_sink(settings)
+    return NoopSink()
 
 
 def build_sheets_sink(settings: Settings) -> ResultSink:
