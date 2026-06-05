@@ -1,0 +1,1 @@
+"""Procesador de mails administrativos."""

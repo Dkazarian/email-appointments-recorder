@@ -1,0 +1,53 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Procesador: Dry run una vez",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "app.main",
+            "cwd": "${workspaceFolder}",
+            "envFile": "${workspaceFolder}/.env",
+            "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+            "console": "integratedTerminal",
+            "args": [
+                "--dry-run",
+                "--limit",
+                "5"
+            ]
+        },
+        {
+            "name": "Procesador: Dry run cada 2 minutos",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "app.main",
+            "cwd": "${workspaceFolder}",
+            "envFile": "${workspaceFolder}/.env",
+            "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+            "console": "integratedTerminal",
+            "args": [
+                "--dry-run",
+                "--watch",
+                "--interval-minutes",
+                "2",
+                "--limit",
+                "5"
+            ]
+        },
+        {
+            "name": "Procesador: TXT una vez",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "app.main",
+            "cwd": "${workspaceFolder}",
+            "envFile": "${workspaceFolder}/.env",
+            "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+            "console": "integratedTerminal",
+            "args": [
+                "--output-txt",
+                "--limit",
+                "5"
+            ]
+        }
+    ]
+}
