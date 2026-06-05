@@ -3,7 +3,7 @@ import time
 
 from .config import load_settings
 from .extractors import ActionExtractor, build_extractor
-from .mail_client import MailClient
+from .mail_client import fetch_mails, move_mail
 from .mail_replier import MailReplier
 from .run_logger import RunLogger
 from .sinks import ResultSink, build_sink
@@ -45,40 +45,37 @@ def get_args():
     return args
 
 def process_cycle(settings, extractor: ActionExtractor, sink: ResultSink, replier: MailReplier, logger: RunLogger, limit: int) -> int:
-    with MailClient(settings) as mail_client:
-        mails = mail_client.fetch(limit)
-        if not mails:
-            logger.status("No se encontraron mails.")
-            return 0
+    mails = fetch_mails(settings, limit)
+    if not mails:
+        logger.status("No se encontraron mails.")
+        return 0
 
-        for mail in mails:
-            try:
-                action = extractor.extract(mail)
-                logger.action(mail, action)
-                validate_processable_action(action)
+    for mail in mails:
+        try:
+            action = extractor.extract(mail)
+            logger.action(mail, action)
+            validate_processable_action(action)
 
-                result = sink.apply(mail, action)
-                logger.status(f"{mail.uid}: {result}")
-                reply_processed(replier, mail, action, logger)
+            result = sink.apply(mail, action)
+            logger.status(f"{mail.uid}: {result}")
+            reply_processed(replier, mail, action, logger)
 
-                if settings.mark_processed:
-                    mail_client.mark_seen(mail.uid)
-                move_processed_mail(mail_client, settings, logger, mail.uid)
-            except Exception as exc:
-                logger.error(mail, exc)
-                reply_error(replier, mail, exc, logger)
-                move_failed_mail(mail_client, settings, logger, mail.uid)
-        return len(mails)
+            move_processed_mail(settings, logger, mail.uid)
+        except Exception as exc:
+            logger.error(mail, exc)
+            reply_error(replier, mail, exc, logger)
+            move_failed_mail(settings, logger, mail.uid)
+    return len(mails)
 
 
-def move_processed_mail(mail_client: MailClient, settings, logger: RunLogger, uid: str) -> None:
-    mail_client.move(uid, settings.processed_folder)
+def move_processed_mail(settings, logger: RunLogger, uid: str) -> None:
+    move_mail(settings, uid, settings.processed_folder)
     logger.status(f"{uid}: movido a {settings.processed_folder}")
 
 
-def move_failed_mail(mail_client: MailClient, settings, logger: RunLogger, uid: str) -> None:
+def move_failed_mail(settings, logger: RunLogger, uid: str) -> None:
     try:
-        mail_client.move(uid, settings.failed_folder)
+        move_mail(settings, uid, settings.failed_folder)
         logger.status(f"{uid}: movido a {settings.failed_folder}")
     except Exception as move_exc:
         logger.error_for_uid(uid, move_exc, event="fallo_movimiento")

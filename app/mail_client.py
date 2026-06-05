@@ -124,6 +124,16 @@ class MailClient:
         return self._imap
 
 
+def fetch_mails(settings: Settings, limit: int) -> list[MailItem]:
+    with MailClient(settings) as mail_client:
+        return mail_client.fetch(limit)
+
+
+def move_mail(settings: Settings, uid: str, folder: str) -> None:
+    with MailClient(settings) as mail_client:
+        mail_client.move(uid, folder)
+
+
 def _decode_mime_header(value: str) -> str:
     parts = decode_header(value)
     decoded = []
