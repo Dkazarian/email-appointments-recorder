@@ -1,17 +1,17 @@
-from dataclasses import dataclass
+﻿from dataclasses import dataclass
+from email import policy
 from email import message_from_bytes
-from email.header import decode_header
+from email.header import decode_header, make_header
 from email.message import Message
 from email.utils import parseaddr
 from html.parser import HTMLParser
 import imaplib
 import re
 
-from .config import Settings
 
 
 @dataclass(frozen=True)
-class MailItem:
+class EmailItem:
     uid: str
     subject: str
     sender: str
@@ -21,12 +21,20 @@ class MailItem:
     body: str
 
 
-class MailClient:
-    def __init__(self, settings: Settings):
-        self.settings = settings
+class EmailClient:
+    def __init__(self, imap: object, smtp: object, processed_folder: str, failed_folder: str):
+        self._imap_host = imap["host"]
+        self._imap_port = imap["port"]
+        self._imap_user = imap["username"]
+        self.smtp_user = smtp["username"]
+        self._imap_password = imap["password"]
+        self._imap_folder = imap["folder"]
+        self._imap_search = imap["search"]
+        self._processed_folder = processed_folder
+        self._failed_folder = failed_folder
         self._imap: imaplib.IMAP4_SSL | None = None
 
-    def __enter__(self) -> "MailClient":
+    def __enter__(self) -> "EmailClient":
         self._connect()
         return self
 
@@ -34,9 +42,9 @@ class MailClient:
         self._disconnect()
 
     def _connect(self) -> None:
-        self._imap = imaplib.IMAP4_SSL(self.settings.imap_host, self.settings.imap_port)
-        self._imap.login(self.settings.imap_user, self.settings.imap_password)
-        self._imap.select(self.settings.imap_folder)
+        self._imap = imaplib.IMAP4_SSL(self._imap_host, self._imap_port)
+        self._imap.login(self._imap_user, self._imap_password)
+        self._imap.select(self._imap_folder)
 
     def _disconnect(self) -> None:
         if not self._imap:
@@ -55,23 +63,23 @@ class MailClient:
         self._disconnect()
         self._connect()
 
-    def fetch(self, limit: int) -> list[MailItem]:
+    def fetch(self, limit: int = 10) -> list[EmailItem]:
         imap = self._require_imap()
-        status, data = imap.uid("search", None, self.settings.imap_search)
+        status, data = imap.uid("search", None, self._imap_search)
         if status != "OK":
             raise RuntimeError(f"Fallo la busqueda IMAP: {status}")
 
         uids = data[0].split()[:limit]
-        mails: list[MailItem] = []
+        mails: list[EmailItem] = []
         for raw_uid in uids:
             uid = raw_uid.decode("utf-8")
             status, msg_data = imap.uid("fetch", raw_uid, "(RFC822)")
             if status != "OK":
                 continue
             raw = msg_data[0][1]
-            msg = message_from_bytes(raw)
+            msg = message_from_bytes(raw, policy=policy.default)
             mails.append(
-                MailItem(
+                EmailItem(
                     uid=uid,
                     subject=_decode_mime_header(msg.get("Subject", "")),
                     sender=parseaddr(msg.get("From", ""))[1],
@@ -124,59 +132,29 @@ class MailClient:
         return self._imap
 
 
-def fetch_mails(settings: Settings, limit: int) -> list[MailItem]:
-    with MailClient(settings) as mail_client:
+def fetch_mails(imap: object, smtp: object, processed_folder: str, failed_folder: str, limit: int) -> list[EmailItem]:
+    with EmailClient(imap, smtp, processed_folder, failed_folder) as mail_client:
         return mail_client.fetch(limit)
 
 
-def move_mail(settings: Settings, uid: str, folder: str) -> None:
-    with MailClient(settings) as mail_client:
+def move_mail(imap: object, smtp: object, processed_folder: str, failed_folder: str, uid: str, folder: str) -> None:
+    with EmailClient(imap, smtp, processed_folder, failed_folder) as mail_client:
         mail_client.move(uid, folder)
 
 
 def _decode_mime_header(value: str) -> str:
-    parts = decode_header(value)
-    decoded = []
-    for text, encoding in parts:
-        if isinstance(text, bytes):
-            decoded.append(text.decode(encoding or "utf-8", errors="replace"))
-        else:
-            decoded.append(text)
-    return "".join(decoded)
+    return str(make_header(decode_header(value)))
 
 
 def _extract_body(msg: Message) -> str:
-    plain = None
-    html = None
-
-    if msg.is_multipart():
-        for part in msg.walk():
-            content_type = part.get_content_type()
-            disposition = str(part.get("Content-Disposition", ""))
-            if "attachment" in disposition:
-                continue
-            payload = _decode_payload(part)
-            if content_type == "text/plain" and payload:
-                plain = payload
-            elif content_type == "text/html" and payload:
-                html = payload
-    else:
-        payload = _decode_payload(msg)
-        if msg.get_content_type() == "text/html":
-            html = payload
-        else:
-            plain = payload
-
-    text = plain or _html_to_text(html or "")
-    return re.sub(r"\n{3,}", "\n\n", text).strip()
-
-
-def _decode_payload(part: Message) -> str:
-    payload = part.get_payload(decode=True)
-    if payload is None:
+    body = msg.get_body(preferencelist=("plain", "html"))
+    if body is None:
         return ""
-    charset = part.get_content_charset() or "utf-8"
-    return payload.decode(charset, errors="replace")
+
+    text = body.get_content()
+    if body.get_content_type() == "text/html":
+        text = _html_to_text(text)
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
 
 
 def _html_to_text(html: str) -> str:
