@@ -235,7 +235,29 @@ def _extract_body(msg: Message) -> str:
     text = body.get_content()
     if body.get_content_type() == "text/html":
         text = _html_to_text(text)
+    text = _remove_quoted_conversation(text)
     return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+
+def _remove_quoted_conversation(text: str) -> str:
+    """Keep the newest reply and discard common quoted-reply sections."""
+    reply_marker = re.compile(
+        r"(?im)^\s*(?:"
+        r"el\s+.+?\s+escribi[oó]:|"
+        r"on\s+.+?\s+wrote:|"
+        r"-{2,}\s*(?:original message|mensaje original|forwarded message|mensaje reenviado)\s*-{2,}|"
+        r"(?:begin forwarded message|inicio del mensaje reenviado):|"
+        r"(?:original message|mensaje original):|"
+        r"de:\s+|"
+        r"from:\s+|"
+        r"^_{5,}"
+        r")"
+    )
+    text = reply_marker.split(text, maxsplit=1)[0]
+    quoted_line = re.search(r"(?m)^\s*>+", text)
+    if quoted_line:
+        text = text[:quoted_line.start()]
+    return text.rstrip()
 
 
 def _html_to_text(html: str) -> str:
@@ -253,16 +275,28 @@ class _TextHTMLParser(HTMLParser):
     def __init__(self):
         super().__init__()
         self._parts: list[str] = []
+        self._quoted_depth = 0
 
     @property
     def text(self) -> str:
         return re.sub(r"\s+\n", "\n", "\n".join(self._parts)).strip()
 
     def handle_data(self, data: str) -> None:
+        if self._quoted_depth:
+            return
         text = data.strip()
         if text:
             self._parts.append(text)
 
     def handle_starttag(self, tag: str, attrs) -> None:
+        if tag.lower() == "blockquote":
+            self._quoted_depth += 1
+            return
+        if self._quoted_depth:
+            return
         if tag.lower() in {"br", "p", "div", "tr", "li"}:
             self._parts.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag.lower() == "blockquote" and self._quoted_depth:
+            self._quoted_depth -= 1

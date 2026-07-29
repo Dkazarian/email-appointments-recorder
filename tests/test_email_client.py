@@ -96,6 +96,52 @@ class EmailClientTests(unittest.TestCase):
         self.assertEqual(result[0].body, "Hello\nworld")
         self.assertEqual(imap.uid.call_count, 2)
 
+    def test_fetch_strips_gmail_quoted_conversation_from_body(self):
+        email_client = client()
+        imap = Mock()
+        email_client._imap = imap
+        raw = (
+            b"From: sender@example.com\r\n"
+            b"Content-Type: text/plain; charset=utf-8\r\n\r\n"
+            b"hello too\n\n"
+            b"El vie, 5 jun 2026 a las 16:13, someone@mail escribi\xc3\xb3:\n"
+            b"hello\n"
+        )
+        imap.uid.side_effect = [("OK", [b"1"]), ("OK", [(b"header", raw)])]
+
+        result = email_client.fetch(1)
+
+        self.assertEqual(result[0].body, "hello too")
+
+    def test_fetch_strips_common_quoted_reply_formats_from_body(self):
+        examples = [
+            "new reply\n\nOn Fri, Jun 5, 2026, someone@mail wrote:\nold reply",
+            "new reply\n\n-----Original Message-----\nold reply",
+            "new reply\n\n-----Mensaje original-----\nold reply",
+            "new reply\n\nBegin forwarded message:\nold reply",
+            "new reply\n\nInicio del mensaje reenviado:\nold reply",
+            "new reply\n\nDe: old@example.com\nEnviado el: 5/6/2026\nold reply",
+            "new reply\n\nFrom: old@example.com\nSent: June 5, 2026\nold reply",
+            "new reply\n\n______________\nold reply",
+            "new reply\n\n> old reply\n> older reply",
+        ]
+
+        for body in examples:
+            with self.subTest(body=body):
+                email_client = client()
+                imap = Mock()
+                email_client._imap = imap
+                raw = (
+                    b"From: sender@example.com\r\n"
+                    b"Content-Type: text/plain; charset=utf-8\r\n\r\n"
+                    + body.encode("utf-8")
+                )
+                imap.uid.side_effect = [("OK", [b"1"]), ("OK", [(b"header", raw)])]
+
+                result = email_client.fetch(1)
+
+                self.assertEqual(result[0].body, "new reply")
+
     def test_fetch_ignores_appended_files(self):
         email_client = client()
         imap = Mock()
