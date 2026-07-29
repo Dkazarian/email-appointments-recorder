@@ -3,7 +3,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class Appointment(BaseModel):
     """Datos de un turno extraídos de un correo electrónico en español."""
-
     model_config = ConfigDict(extra="forbid")
 
     patient_name: str | None = Field(

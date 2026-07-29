@@ -1,23 +1,28 @@
 ﻿from dataclasses import dataclass
+from datetime import datetime
 from email import policy
 from email import message_from_bytes
 from email.header import decode_header, make_header
-from email.message import Message
-from email.utils import parseaddr
+from email.message import EmailMessage, Message
+from email.utils import getaddresses, parsedate_to_datetime, parseaddr
 from html.parser import HTMLParser
 import imaplib
 import re
+import smtplib
+from urllib.parse import quote
 
+from .models import Appointment
 
 
 @dataclass(frozen=True)
 class EmailItem:
     uid: str
-    subject: str
+    url: str | None
     sender: str
     reply_to: str
-    message_id: str
-    references: str
+    recipients: list[str]
+    subject: str
+    sent_at: datetime | None
     body: str
 
 
@@ -26,7 +31,10 @@ class EmailClient:
         self._imap_host = imap["host"]
         self._imap_port = imap["port"]
         self._imap_user = imap["username"]
+        self._smtp_host = smtp["host"]
+        self._smtp_port = smtp["port"]
         self.smtp_user = smtp["username"]
+        self._smtp_password = smtp["password"]
         self._imap_password = imap["password"]
         self._imap_folder = imap["folder"]
         self._imap_search = imap["search"]
@@ -81,11 +89,12 @@ class EmailClient:
             mails.append(
                 EmailItem(
                     uid=uid,
-                    subject=_decode_mime_header(msg.get("Subject", "")),
+                    url=_gmail_url(msg.get("Message-ID", "")),
                     sender=parseaddr(msg.get("From", ""))[1],
                     reply_to=parseaddr(msg.get("Reply-To") or msg.get("From", ""))[1],
-                    message_id=msg.get("Message-ID", ""),
-                    references=msg.get("References", ""),
+                    recipients=_recipients(msg),
+                    subject=_decode_mime_header(msg.get("Subject", "")),
+                    sent_at=_mail_datetime(msg.get("Date", "")),
                     body=_extract_body(msg),
                 )
             )
@@ -93,6 +102,51 @@ class EmailClient:
 
     def mark_seen(self, uid: str) -> None:
         self._require_imap().uid("store", uid, "+FLAGS", r"(\Seen)")
+
+    def mark_completed(self, email: EmailItem | str) -> None:
+        uid = email.uid if isinstance(email, EmailItem) else email
+        self.mark_seen(uid)
+        self.move(uid, self._processed_folder)
+
+    def mark_failed(self, email: EmailItem | str) -> None:
+        uid = email.uid if isinstance(email, EmailItem) else email
+        self.mark_seen(uid)
+        self.move(uid, self._failed_folder)
+
+    def reply_success(self, email: EmailItem, appointment: Appointment) -> None:
+        self._send_reply(
+            email,
+            "El turno fue agregado correctamente a la planilla.\n\n"
+            f"Paciente: {appointment.patient_name or 'No identificado'}\n"
+            f"Estudio: {appointment.study or 'No identificado'}\n"
+            f"Clínica: {appointment.clinic or 'No identificada'}\n"
+            f"Fecha y hora: {' '.join(value for value in (appointment.date, appointment.time) if value) or 'No identificada'}\n",
+        )
+
+    def reply_failed(self, email: EmailItem, error: str) -> None:
+        self._send_reply(
+            email,
+            "No se pudo registrar el turno en la planilla.\n\n"
+            f"Motivo: {error}\n",
+        )
+
+    def _send_reply(self, email: EmailItem, body: str) -> None:
+        message = EmailMessage()
+        message["From"] = self.smtp_user
+        message["To"] = email.reply_to or email.sender
+        message["Subject"] = _reply_subject(email.subject)
+        message.set_content(f"Hola,\n\n{body}\nSaludos.\n")
+
+        if self._smtp_port == 465:
+            with smtplib.SMTP_SSL(self._smtp_host, self._smtp_port) as smtp:
+                smtp.login(self.smtp_user, self._smtp_password)
+                smtp.send_message(message)
+            return
+
+        with smtplib.SMTP(self._smtp_host, self._smtp_port) as smtp:
+            smtp.starttls()
+            smtp.login(self.smtp_user, self._smtp_password)
+            smtp.send_message(message)
 
     def move(self, uid: str, folder: str) -> None:
         try:
@@ -144,6 +198,33 @@ def move_mail(imap: object, smtp: object, processed_folder: str, failed_folder: 
 
 def _decode_mime_header(value: str) -> str:
     return str(make_header(decode_header(value)))
+
+
+def _reply_subject(subject: str) -> str:
+    return subject if subject.lower().startswith("re:") else f"Re: {subject}"
+
+
+def _recipients(msg: Message) -> list[str]:
+    headers = msg.get_all("To", []) + msg.get_all("Cc", [])
+    return [address for _, address in getaddresses(headers) if address]
+
+
+def _gmail_url(message_id: str) -> str | None:
+    """Build a Gmail search link for a message copied by BCC."""
+    message_id = message_id.strip().strip("<>")
+    if not message_id:
+        return None
+    query = quote(f"rfc822msgid:{message_id}", safe="")
+    return f"https://mail.google.com/mail/u/0/#search/{query}"
+
+
+def _mail_datetime(value: str) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return parsedate_to_datetime(value)
+    except (TypeError, ValueError, IndexError):
+        return None
 
 
 def _extract_body(msg: Message) -> str:

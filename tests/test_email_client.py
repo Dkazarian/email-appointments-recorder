@@ -1,5 +1,6 @@
 import imaplib
 import unittest
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, call, patch
 
 from app.email_client import EmailClient, EmailItem
@@ -13,7 +14,12 @@ IMAP = {
     "folder": "INBOX",
     "search": "UNSEEN",
 }
-SMTP = {"username": "smtp-user"}
+SMTP = {
+    "host": "smtp.example.test",
+    "port": 465,
+    "username": "smtp-user",
+    "password": "smtp-secret",
+}
 
 
 def client() -> EmailClient:
@@ -45,9 +51,12 @@ class EmailClientTests(unittest.TestCase):
         email_client._imap = imap
         raw = (
             b"From: Alice <alice@example.com>\r\n"
+            b"To: Ernesto <ernesto@example.com>, team@example.com\r\n"
+            b"Cc: copy@example.com\r\n"
+            b"Date: Mon, 24 Mar 2025 15:55:00 -0300\r\n"
             b"Reply-To: Replies <reply@example.com>\r\n"
             b"Subject: =?utf-8?b?SG9sYQ==?=\r\n"
-            b"Message-ID: <message-1>\r\n"
+            b"Message-ID: <message-1@example.com>\r\n"
             b"References: <previous>\r\n"
             b"Content-Type: text/plain; charset=utf-8\r\n\r\n"
             b"Hello\n\n\nworld\n"
@@ -62,7 +71,16 @@ class EmailClientTests(unittest.TestCase):
 
         self.assertEqual(
             result,
-            [EmailItem("101", "Hola", "alice@example.com", "reply@example.com", "<message-1>", "<previous>", "Hello\n\nworld")],
+            [EmailItem(
+                uid="101",
+                url="https://mail.google.com/mail/u/0/#search/rfc822msgid%3Amessage-1%40example.com",
+                sender="alice@example.com",
+                reply_to="reply@example.com",
+                recipients=["ernesto@example.com", "team@example.com", "copy@example.com"],
+                subject="Hola",
+                sent_at=datetime(2025, 3, 24, 15, 55, tzinfo=timezone(timedelta(hours=-3))),
+                body="Hello\n\nworld",
+            )],
         )
         self.assertEqual(imap.uid.call_args_list[0], call("search", None, "UNSEEN"))
 
@@ -107,6 +125,83 @@ class EmailClientTests(unittest.TestCase):
         email_client.mark_seen("42")
 
         email_client._imap.uid.assert_called_once_with("store", "42", "+FLAGS", r"(\Seen)")
+
+    def test_mark_completed_marks_seen_and_moves_to_processed_folder(self):
+        email_client = client()
+        with patch.object(email_client, "mark_seen") as mark_seen, patch.object(email_client, "move") as move:
+            email_client.mark_completed("42")
+
+        mark_seen.assert_called_once_with("42")
+        move.assert_called_once_with("42", "Processed")
+
+    def test_mark_failed_accepts_email_item_and_moves_to_failed_folder(self):
+        email_client = client()
+        email = EmailItem(
+            uid="42",
+            url=None,
+            sender="from@example.com",
+            reply_to="from@example.com",
+            recipients=[],
+            subject="Subject",
+            sent_at=None,
+            body="Body",
+        )
+        with patch.object(email_client, "mark_seen") as mark_seen, patch.object(email_client, "move") as move:
+            email_client.mark_failed(email)
+
+        mark_seen.assert_called_once_with("42")
+        move.assert_called_once_with("42", "Failed")
+
+    @patch("app.email_client.smtplib.SMTP_SSL")
+    def test_reply_success_sends_confirmation_to_reply_to(self, smtp_class):
+        email_client = client()
+        email = EmailItem(
+            uid="42",
+            url=None,
+            sender="sender@example.com",
+            reply_to="reply@example.com",
+            recipients=[],
+            subject="Turno",
+            sent_at=None,
+            body="Body",
+        )
+        appointment = Mock(
+            patient_name="Ernesto",
+            study="Radiografia",
+            clinic="Clinica Rosa",
+            date="24/3",
+            time="15:55",
+        )
+
+        email_client.reply_success(email, appointment)
+
+        smtp = smtp_class.return_value.__enter__.return_value
+        smtp.login.assert_called_once_with("smtp-user", "smtp-secret")
+        sent_message = smtp.send_message.call_args.args[0]
+        self.assertEqual(sent_message["To"], "reply@example.com")
+        self.assertEqual(sent_message["Subject"], "Re: Turno")
+        self.assertIn("agregado correctamente", sent_message.get_content())
+
+    @patch("app.email_client.smtplib.SMTP_SSL")
+    def test_reply_failed_reports_error(self, smtp_class):
+        email_client = client()
+        email = EmailItem(
+            uid="42",
+            url=None,
+            sender="sender@example.com",
+            reply_to="",
+            recipients=[],
+            subject="Re: Turno",
+            sent_at=None,
+            body="Body",
+        )
+
+        email_client.reply_failed(email, "No contiene fecha")
+
+        sent_message = smtp_class.return_value.__enter__.return_value.send_message.call_args.args[0]
+        self.assertEqual(sent_message["To"], "sender@example.com")
+        self.assertEqual(sent_message["Subject"], "Re: Turno")
+        self.assertIn("No contiene fecha", sent_message.get_content())
 
     def test_move_uses_move_when_supported(self):
         email_client = client()

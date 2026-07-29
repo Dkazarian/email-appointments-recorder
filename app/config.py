@@ -33,8 +33,7 @@ def load_config() -> Config:
         processed_folder= os.getenv("MAIL_PROCESSED_FOLDER"),
         failed_folder= os.getenv("MAIL_FAILED_FOLDER"),
         database= {
-            "client_secret": Path(os.getenv("GOOGLE_OAUTH_CLIENT_SECRET")),
-            "token": Path(os.getenv("GOOGLE_OAUTH_TOKEN")),
+            "credentials": Path(os.getenv("GOOGLE_CREDENTIALS")),
             "sheet_id": os.getenv("SHEET_ID"),
             "sheet_tab": os.getenv("SHEET_TAB")
         },
