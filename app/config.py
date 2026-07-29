@@ -8,6 +8,7 @@ class Config:
     smtp: object
     processed_folder: str
     failed_folder: str
+    allowed_senders: set[str]
     api_key: str
     interval_minutes: int
     database: object
@@ -32,6 +33,11 @@ def load_config() -> Config:
         },
         processed_folder= os.getenv("MAIL_PROCESSED_FOLDER"),
         failed_folder= os.getenv("MAIL_FAILED_FOLDER"),
+        allowed_senders={
+            sender.strip().lower()
+            for sender in os.getenv("ALLOWED_SENDERS", "").split(",")
+            if sender.strip()
+        },
         database= {
             "credentials": Path(os.getenv("GOOGLE_CREDENTIALS")),
             "sheet_id": os.getenv("SHEET_ID"),

@@ -68,6 +68,7 @@ def run(
         config.smtp,
         config.processed_folder,
         config.failed_folder,
+        config.allowed_senders,
     ) as email_client:
         cycles = 0
         while max_cycles is None or cycles < max_cycles:

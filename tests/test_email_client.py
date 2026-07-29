@@ -22,8 +22,8 @@ SMTP = {
 }
 
 
-def client() -> EmailClient:
-    return EmailClient(IMAP, SMTP, "Processed", "Failed")
+def client(allowed_senders=None) -> EmailClient:
+    return EmailClient(IMAP, SMTP, "Processed", "Failed", allowed_senders)
 
 
 class EmailClientTests(unittest.TestCase):
@@ -95,6 +95,22 @@ class EmailClientTests(unittest.TestCase):
 
         self.assertEqual(result[0].body, "Hello\nworld")
         self.assertEqual(imap.uid.call_count, 2)
+
+    def test_fetch_ignores_senders_outside_whitelist(self):
+        email_client = client({"allowed@example.com"})
+        imap = Mock()
+        email_client._imap = imap
+        allowed = b"From: allowed@example.com\r\n\r\nAllowed"
+        blocked = b"From: blocked@example.com\r\n\r\nBlocked"
+        imap.uid.side_effect = [
+            ("OK", [b"1 2"]),
+            ("OK", [(b"header", allowed)]),
+            ("OK", [(b"header", blocked)]),
+        ]
+
+        result = email_client.fetch(2)
+
+        self.assertEqual([mail.sender for mail in result], ["allowed@example.com"])
 
     def test_fetch_strips_gmail_quoted_conversation_from_body(self):
         email_client = client()
@@ -197,6 +213,31 @@ class EmailClientTests(unittest.TestCase):
 
         mark_seen.assert_called_once_with("42")
         move.assert_called_once_with("42", "Failed")
+
+    @patch("app.email_client.smtplib.SMTP_SSL")
+    def test_send_sends_plain_text_message(self, smtp_class):
+        email_client = client()
+
+        email_client.send("recipient@example.com", "Subject", "Body")
+
+        smtp = smtp_class.return_value.__enter__.return_value
+        smtp.login.assert_called_once_with("smtp-user", "smtp-secret")
+        sent_message = smtp.send_message.call_args.args[0]
+        self.assertEqual(sent_message["To"], "recipient@example.com")
+        self.assertEqual(sent_message["Subject"], "Subject")
+        self.assertIn("Body", sent_message.get_content())
+
+    def test_delete_marks_uid_deleted_and_expunges(self):
+        email_client = client()
+        email_client._imap = Mock()
+        email_client._imap.uid.return_value = ("OK", [])
+
+        email_client.delete("42")
+
+        email_client._imap.uid.assert_called_once_with(
+            "STORE", "42", "+FLAGS", r"(\Deleted)"
+        )
+        email_client._imap.expunge.assert_called_once_with()
 
     @patch("app.email_client.smtplib.SMTP_SSL")
     def test_reply_success_sends_confirmation_to_reply_to(self, smtp_class):

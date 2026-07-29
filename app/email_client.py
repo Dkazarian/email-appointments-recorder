@@ -9,6 +9,7 @@ from html.parser import HTMLParser
 import imaplib
 import re
 import smtplib
+from collections.abc import Collection
 from urllib.parse import quote
 
 from .models import Appointment
@@ -27,7 +28,14 @@ class EmailItem:
 
 
 class EmailClient:
-    def __init__(self, imap: object, smtp: object, processed_folder: str, failed_folder: str):
+    def __init__(
+        self,
+        imap: object,
+        smtp: object,
+        processed_folder: str,
+        failed_folder: str,
+        allowed_senders: Collection[str] | None = None,
+    ):
         self._imap_host = imap["host"]
         self._imap_port = imap["port"]
         self._imap_user = imap["username"]
@@ -40,6 +48,9 @@ class EmailClient:
         self._imap_search = imap["search"]
         self._processed_folder = processed_folder
         self._failed_folder = failed_folder
+        self._allowed_senders = {
+            sender.strip().lower() for sender in (allowed_senders or ()) if sender.strip()
+        }
         self._imap: imaplib.IMAP4_SSL | None = None
 
     def __enter__(self) -> "EmailClient":
@@ -86,11 +97,14 @@ class EmailClient:
                 continue
             raw = msg_data[0][1]
             msg = message_from_bytes(raw, policy=policy.default)
+            sender = parseaddr(msg.get("From", ""))[1]
+            if self._allowed_senders and sender.lower() not in self._allowed_senders:
+                continue
             mails.append(
                 EmailItem(
                     uid=uid,
                     url=_gmail_url(msg.get("Message-ID", "")),
-                    sender=parseaddr(msg.get("From", ""))[1],
+                    sender=sender,
                     reply_to=parseaddr(msg.get("Reply-To") or msg.get("From", ""))[1],
                     recipients=_recipients(msg),
                     subject=_decode_mime_header(msg.get("Subject", "")),
@@ -113,6 +127,34 @@ class EmailClient:
         self.mark_seen(uid)
         self.move(uid, self._failed_folder)
 
+    def send(self, recipient: str, subject: str, body: str) -> None:
+        """Send a plain-text email using the configured SMTP account."""
+        message = EmailMessage()
+        message["From"] = self.smtp_user
+        message["To"] = recipient
+        message["Subject"] = subject
+        message.set_content(body)
+
+        if self._smtp_port == 465:
+            with smtplib.SMTP_SSL(self._smtp_host, self._smtp_port) as smtp:
+                smtp.login(self.smtp_user, self._smtp_password)
+                smtp.send_message(message)
+            return
+
+        with smtplib.SMTP(self._smtp_host, self._smtp_port) as smtp:
+            smtp.starttls()
+            smtp.login(self.smtp_user, self._smtp_password)
+            smtp.send_message(message)
+
+    def delete(self, email: EmailItem | str) -> None:
+        """Permanently delete an email from the currently selected folder."""
+        uid = email.uid if isinstance(email, EmailItem) else email
+        imap = self._require_imap()
+        status, data = imap.uid("STORE", uid, "+FLAGS", r"(\Deleted)")
+        if status != "OK":
+            raise RuntimeError(f"No se pudo eliminar el mail {uid}: {data}")
+        imap.expunge()
+
     def reply_success(self, email: EmailItem, appointment: Appointment) -> None:
         self._send_reply(
             email,
@@ -131,22 +173,11 @@ class EmailClient:
         )
 
     def _send_reply(self, email: EmailItem, body: str) -> None:
-        message = EmailMessage()
-        message["From"] = self.smtp_user
-        message["To"] = email.reply_to or email.sender
-        message["Subject"] = _reply_subject(email.subject)
-        message.set_content(f"Hola,\n\n{body}\nSaludos.\n")
-
-        if self._smtp_port == 465:
-            with smtplib.SMTP_SSL(self._smtp_host, self._smtp_port) as smtp:
-                smtp.login(self.smtp_user, self._smtp_password)
-                smtp.send_message(message)
-            return
-
-        with smtplib.SMTP(self._smtp_host, self._smtp_port) as smtp:
-            smtp.starttls()
-            smtp.login(self.smtp_user, self._smtp_password)
-            smtp.send_message(message)
+        self.send(
+            email.reply_to or email.sender,
+            _reply_subject(email.subject),
+            f"Hola,\n\n{body}\nSaludos.\n",
+        )
 
     def move(self, uid: str, folder: str) -> None:
         try:
