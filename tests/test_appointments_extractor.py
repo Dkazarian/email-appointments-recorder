@@ -63,6 +63,24 @@ class AppointmentsExtractorTests(unittest.TestCase):
         self.assertEqual(failed[0].error, "Sin turno")
         self.assertIs(failed[0].mail, self.mail)
 
+    def test_parse_all_uses_next_ia_client_when_first_one_fails(self):
+        unavailable_client = Mock()
+        unavailable_client.generate_structured_output.side_effect = RuntimeError(
+            "temporary provider failure"
+        )
+        fallback_client = Mock()
+        fallback_client.generate_structured_output.return_value = IAExtractionResponse(
+            failed_emails=[{"email_id": "42", "error_message": "Sin turno"}]
+        )
+        extractor = AppointmentsExtractor([unavailable_client, fallback_client])
+
+        extracted, failed = extractor.parse_all([self.mail])
+
+        self.assertEqual(extracted, [])
+        self.assertEqual(failed[0].error, "Sin turno")
+        unavailable_client.generate_structured_output.assert_called_once()
+        fallback_client.generate_structured_output.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,5 @@
 ﻿from typing import NamedTuple
 from pydantic import BaseModel, Field
-from app.gemini_ia_client import GeminiIAClient
 from app.models import Appointment
 from app.email_client import EmailItem
 
@@ -29,13 +28,18 @@ class FailedItem(NamedTuple):
 
 
 class AppointmentsExtractor:
-    def __init__(self, ia_client: GeminiIAClient):
-        self.ia_client = ia_client
+    def __init__(self, ia_clients):
+        self.ia_clients = list(ia_clients) if isinstance(ia_clients, (list, tuple)) else [ia_clients]
 
     def _build_batch_prompt(self, emails: list[EmailItem]) -> str:
         prompt = (
             "Analiza el siguiente lote de correos electrónicos y clasifícalos en el JSON de respuesta:\n"
             "1. Si encuentras turnos, extrae los datos en 'extracted_appointments' vinculando su 'email_id'.\n"
+            "Un mismo correo puede informar varios turnos para el mismo paciente; en ese caso, "
+            "crea un elemento separado por cada turno y repite el mismo 'email_id'.\n"
+            "La primera línea suele contener el nombre del paciente y las líneas siguientes contienen "
+            "estudio, lugar, fecha y hora. Usa el nombre del encabezado para cada turno del correo. "
+            "Extrae todos los datos que estén presentes; no uses null para un dato que aparezca en el texto.\n"
             "2. Si un correo NO contiene ningún turno médico o es imposible de parsear, agrega su 'email_id' "
             "junto con el motivo del fallo en la lista 'failed_emails'.\n\n"
             "Sé estricto. Cada email_id provisto debe aparecer en alguna de las dos listas.\n\n"
@@ -58,10 +62,20 @@ class AppointmentsExtractor:
 
         prompt = self._build_batch_prompt(emails)
         
-        gemini_result: IAExtractionResponse = self.ia_client.generate_structured_output(
-            prompt=prompt,
-            response_schema=IAExtractionResponse
-        )
+        last_error = None
+        for ia_client in self.ia_clients:
+            try:
+                gemini_result: IAExtractionResponse = ia_client.generate_structured_output(
+                    prompt=prompt,
+                    response_schema=IAExtractionResponse,
+                )
+                break
+            except Exception as error:
+                last_error = error
+        else:
+            if last_error is not None:
+                raise last_error
+            raise RuntimeError("No IA clients configured")
 
         for appt in gemini_result.extracted_appointments:
             original_mail = email_map.get(appt.email_id)

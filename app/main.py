@@ -1,7 +1,9 @@
-import json
+﻿import json
 import time
 from collections.abc import Callable
 from typing import Any
+
+from google.genai.errors import ServerError
 
 from .appointments_extractor import AppointmentsExtractor
 from .appointments_sheet import AppointmentsSheet
@@ -9,6 +11,7 @@ from .config import load_config
 from .email_client import EmailClient
 from .gemini_ia_client import GeminiIAClient
 from .logger import Logger
+from .openrouter_ia_client import OpenRouterIAClient
 
 
 def process_batch(email_client, extractor, sheets, logger) -> None:
@@ -40,7 +43,8 @@ def run(
     *,
     email_client_factory: Callable = EmailClient,
     extractor_factory: Callable = AppointmentsExtractor,
-    ia_client_factory: Callable = GeminiIAClient,
+    gemini_ia_client_factory: Callable = GeminiIAClient,
+    openrouter_ia_client_factory: Callable = OpenRouterIAClient,
     sheets_factory: Callable = AppointmentsSheet,
     logger_factory: Callable = Logger,
     sleep: Callable = time.sleep,
@@ -55,7 +59,19 @@ def run(
     credentials = json.loads(
         config.database["credentials"].read_text(encoding="utf-8")
     )
-    extractor = extractor_factory(ia_client_factory(config.api_key))
+    ia_clients = []
+    if config.gemini_ia_api_key:
+        ia_clients.append(gemini_ia_client_factory(config.gemini_ia_api_key, config.gemini_ia_model))
+    if config.openrouter_api_key and config.open_router_model:
+        ia_clients.append(
+            openrouter_ia_client_factory(
+                config.openrouter_api_key,
+                config.open_router_model,
+            )
+        )
+    if not ia_clients:
+        raise ValueError("At least one IA client must be configured")
+    extractor = extractor_factory(ia_clients)
     sheets = sheets_factory(
         credentials,
         config.database["sheet_id"],
@@ -74,6 +90,13 @@ def run(
         while max_cycles is None or cycles < max_cycles:
             try:
                 process_batch(email_client, extractor, sheets, logger)
+            except ServerError as error:
+                if error.code == 503:
+                    logger.log_error(
+                        f"An IA provider is temporarily unavailable; emails will be retried next cycle: {error}"
+                    )
+                else:
+                    logger.log_error(str(error))
             except Exception as error:
                 logger.log_error(str(error))
 

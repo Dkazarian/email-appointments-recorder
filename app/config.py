@@ -9,7 +9,10 @@ class Config:
     processed_folder: str
     failed_folder: str
     allowed_senders: set[str]
-    api_key: str
+    gemini_ia_api_key: str
+    gemini_ia_model: str
+    openrouter_api_key: str | None
+    open_router_model: str | None
     interval_minutes: int
     database: object
 
@@ -43,7 +46,10 @@ def load_config() -> Config:
             "sheet_id": os.getenv("SHEET_ID"),
             "sheet_tab": os.getenv("SHEET_TAB")
         },
-        api_key=os.getenv("API_KEY"),
+        gemini_ia_api_key=os.getenv("GEMINI_IA_API_KEY"),
+        gemini_ia_model=os.getenv("GEMINI_IA_MODEL", "gemini-2.0-flash"),
+        openrouter_api_key=os.getenv("OPENROUTER_API_KEY"),
+        open_router_model=os.getenv("OPEN_ROUTER_MODEL"),
         interval_minutes=int(os.getenv("INTERVAL_MINUTES"))
     )
 
