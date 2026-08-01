@@ -62,10 +62,20 @@ def credentials_from_environment() -> dict:
     if not raw_credentials:
         raise RuntimeError("GOOGLE_CREDENTIALS is not configured")
 
-    credentials_path = Path(raw_credentials)
-    if credentials_path.is_file():
-        raw_credentials = credentials_path.read_text(encoding="utf-8")
-    return json.loads(raw_credentials)
+    raw_credentials = raw_credentials.strip()
+    try:
+        return json.loads(raw_credentials)
+    except json.JSONDecodeError:
+        pass
+
+    if len(raw_credentials) < 240:
+        credentials_path = Path(raw_credentials)
+        if credentials_path.is_file():
+            return json.loads(credentials_path.read_text(encoding="utf-8"))
+
+    raise RuntimeError(
+        "GOOGLE_CREDENTIALS must contain service-account JSON or a valid JSON file path"
+    )
 
 
 def seed_records(count: int) -> list[tuple[EmailItem, Appointment]]:

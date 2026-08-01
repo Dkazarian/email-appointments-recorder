@@ -44,15 +44,25 @@ class AppointmentsSheetIntegrationTests(unittest.TestCase):
         if not raw_credentials:
             raise unittest.SkipTest("Set GOOGLE_CREDENTIALS")
 
-        credentials_path = Path(raw_credentials)
-        if credentials_path.is_file():
-            raw_credentials = credentials_path.read_text(encoding="utf-8")
+        raw_credentials = raw_credentials.strip()
         try:
             return json.loads(raw_credentials)
-        except json.JSONDecodeError as error:
-            raise unittest.SkipTest(
-                "GOOGLE_CREDENTIALS must be a service-account JSON object or file"
-            ) from error
+        except json.JSONDecodeError:
+            pass
+
+        if len(raw_credentials) < 240:
+            credentials_path = Path(raw_credentials)
+            if credentials_path.is_file():
+                try:
+                    return json.loads(credentials_path.read_text(encoding="utf-8"))
+                except json.JSONDecodeError as error:
+                    raise unittest.SkipTest(
+                        "GOOGLE_CREDENTIALS file is not valid JSON"
+                    ) from error
+
+        raise unittest.SkipTest(
+            "GOOGLE_CREDENTIALS must contain service-account JSON or a valid JSON file path"
+        )
 
     def test_appends_and_reads_a_combined_row(self):
         marker = f"codex-sheets-integration-{uuid.uuid4()}"
