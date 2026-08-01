@@ -44,7 +44,8 @@ def load_config() -> Config:
         database= {
             "credentials": Path(os.getenv("GOOGLE_CREDENTIALS")),
             "sheet_id": os.getenv("SHEET_ID"),
-            "sheet_tab": os.getenv("SHEET_TAB")
+            "table_name": os.getenv("SHEET_TABLE", "Turnos"),
+            "sheet_tab": os.getenv("SHEET_TAB", "Turnos"),
         },
         gemini_ia_api_key=os.getenv("GEMINI_IA_API_KEY"),
         gemini_ia_model=os.getenv("GEMINI_IA_MODEL", "gemini-2.0-flash"),

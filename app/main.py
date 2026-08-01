@@ -75,7 +75,7 @@ def run(
     sheets = sheets_factory(
         credentials,
         config.database["sheet_id"],
-        config.database["sheet_tab"],
+        config.database["table_name"],
     )
     logger = logger_factory()
 
