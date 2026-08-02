@@ -72,6 +72,7 @@ class EndToEndIntegrationTests(unittest.TestCase):
             "27/12/2026 14:30"
         )
         reply_subject = f"Re: {subject}"
+        self.addCleanup(self._cleanup_test_data, subject, reply_subject, marker)
 
         self._send_email(subject, body)
         received = self._wait_for_email(subject, self.config.imap["folder"])
@@ -94,6 +95,7 @@ class EndToEndIntegrationTests(unittest.TestCase):
             **{
                 f"{self.ia_provider}_ia_client_factory": self._printing_ia_client_factory()
             },
+            ia_provider=self.ia_provider,
         )
 
         processed = self._wait_for_email(subject, self.config.processed_folder)
@@ -124,6 +126,7 @@ class EndToEndIntegrationTests(unittest.TestCase):
         stored_body = email_rows[0][-1].replace("\r\n", "\n")
         self.assertIn(body, stored_body)
 
+    def _cleanup_test_data(self, subject, reply_subject, marker):
         if os.getenv("KEEP_END_TO_END_DATA") != "1":
             self._clean_emails(subject, reply_subject)
             self._clean_sheet_rows(marker)
@@ -216,7 +219,7 @@ class EndToEndIntegrationTests(unittest.TestCase):
                 try:
                     with self._client(
                         folder=folder,
-                        search=f'HEADER Subject "{subject}"',
+                        search="ALL",
                     ) as client:
                         for email in client.fetch(100):
                             if email.subject == subject:

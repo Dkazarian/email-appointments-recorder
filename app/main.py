@@ -50,6 +50,7 @@ def run(
     logger_factory: Callable = Logger,
     sleep: Callable = time.sleep,
     max_cycles: int | None = None,
+    ia_provider: str | None = None,
 ) -> None:
     """Build integrations and poll until interrupted.
 
@@ -58,7 +59,14 @@ def run(
     """
     config = config or load_config()
     credentials = load_google_credentials(config.database["credentials"])
-    if config.local_ia_enabled:
+    selected_provider = ia_provider.strip().lower() if ia_provider else None
+    if selected_provider not in {None, "local", "gemini", "openrouter"}:
+        raise ValueError("ia_provider must be local, gemini, or openrouter")
+
+    use_local = selected_provider == "local" or (
+        selected_provider is None and config.local_ia_enabled
+    )
+    if use_local:
         ia_clients = [
             local_ia_client_factory(
                 config.local_ia_base_url,
@@ -68,14 +76,18 @@ def run(
         ]
     else:
         ia_clients = []
-        if config.gemini_ia_api_key:
+        if config.gemini_ia_api_key and selected_provider in {None, "gemini"}:
             ia_clients.append(
                 gemini_ia_client_factory(
                     config.gemini_ia_api_key,
                     config.gemini_ia_model,
                 )
             )
-        if config.openrouter_api_key and config.open_router_model:
+        if (
+            config.openrouter_api_key
+            and config.open_router_model
+            and selected_provider in {None, "openrouter"}
+        ):
             ia_clients.append(
                 openrouter_ia_client_factory(
                     config.openrouter_api_key,
@@ -84,9 +96,12 @@ def run(
             )
     if not ia_clients:
         raise ValueError("At least one IA client must be configured")
-    process_emails_individually = config.local_ia_enabled or (
-        not config.gemini_ia_api_key
-        and bool(config.openrouter_api_key and config.open_router_model)
+    process_emails_individually = selected_provider in {"local", "openrouter"} or (
+        selected_provider is None
+        and (config.local_ia_enabled or (
+            not config.gemini_ia_api_key
+            and bool(config.openrouter_api_key and config.open_router_model)
+        ))
     )
     extractor = extractor_factory(
         ia_clients,
@@ -106,6 +121,7 @@ def run(
         config.processed_folder,
         config.failed_folder,
         config.allowed_senders,
+        config.mail_web_base_url,
     ) as email_client:
         cycles = 0
         while max_cycles is None or cycles < max_cycles:

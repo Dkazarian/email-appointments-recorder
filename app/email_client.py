@@ -41,6 +41,7 @@ class EmailClient:
         processed_folder: str,
         failed_folder: str,
         allowed_senders: Collection[str] | None = None,
+        mail_web_base_url: str = "https://mail.google.com/mail/u/0",
     ):
         self._imap_host = imap["host"]
         self._imap_port = imap["port"]
@@ -57,6 +58,7 @@ class EmailClient:
         self._allowed_senders = {
             sender.strip().lower() for sender in (allowed_senders or ()) if sender.strip()
         }
+        self._mail_web_base_url = mail_web_base_url.rstrip("/")
         self._imap: imaplib.IMAP4_SSL | None = None
 
     def __enter__(self) -> "EmailClient":
@@ -109,7 +111,7 @@ class EmailClient:
             mails.append(
                 EmailItem(
                     uid=uid,
-                    url=_gmail_url(msg.get("Message-ID", "")),
+                    url=_mail_url(msg.get("Message-ID", ""), self._mail_web_base_url),
                     sender=sender,
                     reply_to=parseaddr(msg.get("Reply-To") or msg.get("From", ""))[1],
                     recipients=_recipients(msg),
@@ -249,13 +251,13 @@ def _recipients(msg: Message) -> list[str]:
     return [address for _, address in getaddresses(headers) if address]
 
 
-def _gmail_url(message_id: str) -> str | None:
-    """Build a Gmail search link for a message copied by BCC."""
+def _mail_url(message_id: str, base_url: str) -> str | None:
+    """Build a webmail search link for a message copied by BCC."""
     message_id = message_id.strip().strip("<>")
     if not message_id:
         return None
     query = quote(f"rfc822msgid:{message_id}", safe="")
-    return f"https://mail.google.com/mail/u/0/#search/{query}"
+    return f"{base_url.rstrip('/')}/#search/{query}"
 
 
 def _mail_datetime(value: str) -> datetime | None:

@@ -130,4 +130,16 @@ class AppointmentsExtractor:
             if original_mail:
                 failed_list.append(FailedItem(error=failed_info.error_message, mail=original_mail))
 
+        handled_uids = {item.mail.uid for item in extracted_list} | {
+            item.mail.uid for item in failed_list
+        }
+        for email in emails:
+            if email.uid not in handled_uids:
+                failed_list.append(
+                    FailedItem(
+                        error="La IA no pudo vincular el resultado con este correo",
+                        mail=email,
+                    )
+                )
+
         return extracted_list, failed_list

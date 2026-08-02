@@ -62,6 +62,22 @@ class AppointmentsSheetTests(unittest.TestCase):
             sheets.append_rows_to_table([["Ernesto"]])
 
     @patch("app.appointments_sheet.gspread.service_account_from_dict")
+    def test_does_not_append_duplicate_email_and_appointment_rows(self, service_account):
+        sheets = AppointmentsSheet({}, "spreadsheet-id", "Turnos")
+        existing_email_row = sheets.email_to_row(self.email)
+        existing_appointment_row = sheets.email_and_appointment_to_row(
+            self.email, self.appointment
+        )
+        sheets.spreadsheet.worksheet.return_value.get_all_values.side_effect = [
+            [email_headers, existing_email_row],
+            [headers, existing_appointment_row],
+        ]
+
+        sheets.add_appointments([(self.email, self.appointment)])
+
+        sheets.spreadsheet.values_append.assert_not_called()
+
+    @patch("app.appointments_sheet.gspread.service_account_from_dict")
     def test_add_appointments_appends_one_combined_row_per_appointment(
         self, service_account
     ):

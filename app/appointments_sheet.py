@@ -54,17 +54,37 @@ class AppointmentsSheet:
             return
 
         unique_emails = dict((email.uid, email) for email, _ in appointments)
-        self._append_rows(
-            self.email_table_name,
-            [self.email_to_row(email) for email in unique_emails.values()],
-        )
-        self._append_rows(
-            self.table_name,
-            [
-                self.email_and_appointment_to_row(email, appointment)
-                for email, appointment in appointments
-            ],
-        )
+        existing_email_rows = self._existing_rows(self.email_table_name)
+        existing_email_uids = {row[0] for row in existing_email_rows if row}
+        email_rows = [
+            self.email_to_row(email)
+            for email in unique_emails.values()
+            if email.uid not in existing_email_uids
+        ]
+        if email_rows:
+            self._append_rows(self.email_table_name, email_rows)
+
+        existing_appointment_rows = self._existing_rows(self.table_name)
+        existing_keys = {
+            (row[8], row[0], row[4], row[5], row[10])
+            for row in existing_appointment_rows
+            if len(row) > 10
+        }
+        appointment_rows = []
+        for email, appointment in appointments:
+            row = self.email_and_appointment_to_row(email, appointment)
+            key = (row[8], row[0], row[4], row[5], row[10])
+            if key not in existing_keys:
+                appointment_rows.append(row)
+        if appointment_rows:
+            self._append_rows(self.table_name, appointment_rows)
+
+    def _existing_rows(self, table_name: str) -> list[list[str]]:
+        try:
+            rows = self.spreadsheet.worksheet(table_name).get_all_values()
+        except Exception:
+            return []
+        return rows if isinstance(rows, list) else []
 
     def append_rows_to_table(self, rows_data: list[list[str]]) -> None:
         self._append_rows(self.table_name, rows_data)

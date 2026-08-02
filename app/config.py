@@ -19,6 +19,7 @@ class Config:
     local_ia_model: str
     local_ia_timeout_seconds: int
     interval_minutes: int
+    mail_web_base_url: str
     database: object
 
 def load_config() -> Config:
@@ -61,7 +62,10 @@ def load_config() -> Config:
         local_ia_base_url=os.getenv("LOCAL_IA_BASE_URL", "http://localhost:1234/v1"),
         local_ia_model=os.getenv("LOCAL_IA_MODEL", "google_gemma-3-4b-it"),
         local_ia_timeout_seconds=int(os.getenv("LOCAL_IA_TIMEOUT_SECONDS", "300")),
-        interval_minutes=int(os.getenv("INTERVAL_MINUTES"))
+        interval_minutes=int(os.getenv("INTERVAL_MINUTES")),
+        mail_web_base_url=os.getenv(
+            "MAIL_WEB_BASE_URL", "https://mail.google.com/mail/u/0"
+        ),
     )
 
 
