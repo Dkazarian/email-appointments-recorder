@@ -17,4 +17,9 @@ class LocalAppointmentsExtractorIntegrationTests(unittest.TestCase):
             os.getenv("LOCAL_IA_MODEL", "google_gemma-3-4b-it"),
             int(os.getenv("LOCAL_IA_TIMEOUT_SECONDS", "120")),
         )
-        assert_two_email_extraction(self, "Local LM Studio", client)
+        assert_two_email_extraction(
+            self,
+            "Local LM Studio",
+            client,
+            process_emails_individually=True,
+        )

@@ -23,4 +23,5 @@ class OpenRouterAppointmentsExtractorIntegrationTests(unittest.TestCase):
             self,
             "OpenRouter",
             OpenRouterIAClient(api_key, model_name),
+            process_emails_individually=True,
         )

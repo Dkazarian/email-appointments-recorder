@@ -1,7 +1,7 @@
 import json
 import unittest
 
-from app.appointments_extractor import IAExtractionResponse, AppointmentsExtractor
+from app.appointments_extractor import AppointmentsExtractor
 from app.email_client import EmailItem
 
 
@@ -41,26 +41,37 @@ EMAILS = [
 ]
 
 
-def assert_two_email_extraction(test_case: unittest.TestCase, provider_name, ia_client):
-    prompt = AppointmentsExtractor([])._build_batch_prompt(EMAILS)
-    raw_response = ia_client.generate_structured_output(
-        prompt=prompt,
-        response_schema=IAExtractionResponse,
-    )
-    if hasattr(raw_response, "model_dump"):
-        printable_response = raw_response.model_dump()
-    else:
-        printable_response = raw_response
-    print(
-        f"\n{provider_name} raw response:\n"
-        + json.dumps(printable_response, ensure_ascii=False, indent=2, default=str)
-    )
-
-    class StaticIAClient:
+def assert_two_email_extraction(
+    test_case: unittest.TestCase,
+    provider_name,
+    ia_client,
+    *,
+    process_emails_individually: bool = False,
+):
+    class PrintingIAClient:
         def generate_structured_output(self, prompt, response_schema):
-            return raw_response
+            response = ia_client.generate_structured_output(
+                prompt=prompt,
+                response_schema=response_schema,
+            )
+            printable_response = (
+                response.model_dump() if hasattr(response, "model_dump") else response
+            )
+            print(
+                f"\n{provider_name} response:\n"
+                + json.dumps(
+                    printable_response,
+                    ensure_ascii=False,
+                    indent=2,
+                    default=str,
+                )
+            )
+            return response
 
-    extractor = AppointmentsExtractor([StaticIAClient()])
+    extractor = AppointmentsExtractor(
+        [PrintingIAClient()],
+        process_emails_individually=process_emails_individually,
+    )
     extracted, failed = extractor.parse_all(EMAILS)
 
     print(
