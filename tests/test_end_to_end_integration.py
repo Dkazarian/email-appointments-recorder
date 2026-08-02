@@ -55,11 +55,8 @@ class EndToEndIntegrationTests(unittest.TestCase):
         subject = f"E2E-turno-{marker}"
         body = (
             f"Paciente: E2E Paciente {marker}\n"
-            "Estudio: Radiografia\n"
-            "Detalle: Radiografia mano izquierda\n"
-            "Clinica: E2E Clinica\n"
-            "Fecha: 31/12/2099\n"
-            "Hora: 23:59"
+            "Turno - Estudio: Radiografia; Detalle: Radiografia mano izquierda; "
+            "Clínica: E2E Clinica; Fecha: 31/12/2026; Hora: 23:59"
         )
         reply_subject = f"Re: {subject}"
 
@@ -84,27 +81,46 @@ class EndToEndIntegrationTests(unittest.TestCase):
         self.assertIsNotNone(reply, "The success reply was not received")
         self.assertIn("agregado correctamente", reply.body)
 
-        appointment_rows = [
-            row
-            for row in self.sheet.get_all_values()
-            if marker in row and subject in row
-        ]
+        appointment_rows = self._wait_for_rows(
+            self.sheet,
+            lambda row: self._row_contains(row, marker, subject),
+        )
         self.assertEqual(len(appointment_rows), 1)
         self.assertEqual(appointment_rows[0][0], f"E2E Paciente {marker}")
         self.assertEqual(appointment_rows[0][1], "Radiografia")
         self.assertEqual(appointment_rows[0][2], "Radiografia mano izquierda")
+        self.assertEqual(appointment_rows[0][3], "E2E Clinica")
+        self.assertEqual(appointment_rows[0][4], "31/12/2026")
+        self.assertEqual(appointment_rows[0][5], "23:59:00")
 
-        email_rows = [
-            row
-            for row in self.email_sheet.get_all_values()
-            if marker in row and subject in row
-        ]
+        email_rows = self._wait_for_rows(
+            self.email_sheet,
+            lambda row: self._row_contains(row, marker, subject),
+        )
         self.assertEqual(len(email_rows), 1)
-        self.assertIn(body, email_rows[0][-1])
+        stored_body = email_rows[0][-1].replace("\r\n", "\n")
+        self.assertIn(body, stored_body)
 
         if os.getenv("KEEP_END_TO_END_DATA") != "1":
             self._clean_emails(subject, reply_subject)
             self._clean_sheet_rows(marker)
+
+    def _wait_for_rows(self, worksheet, predicate):
+        deadline = time.monotonic() + int(
+            os.getenv("SHEETS_INTEGRATION_TIMEOUT_SECONDS", "30")
+        )
+        while time.monotonic() < deadline:
+            matching_rows = [
+                row for row in worksheet.get_all_values() if predicate(row)
+            ]
+            if matching_rows:
+                return matching_rows
+            time.sleep(2)
+        return []
+
+    @staticmethod
+    def _row_contains(row, *needles):
+        return all(any(needle in value for value in row) for needle in needles)
 
     def _send_email(self, subject: str, body: str) -> None:
         self._client().send(self.config.imap["username"], subject, body)
@@ -166,7 +182,7 @@ class EndToEndIntegrationTests(unittest.TestCase):
             row_numbers = [
                 index
                 for index, row in enumerate(rows, start=1)
-                if marker in row
+                if self._row_contains(row, marker)
             ]
             for row_number in reversed(row_numbers):
                 worksheet.delete_rows(row_number)
