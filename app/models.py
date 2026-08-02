@@ -11,7 +11,7 @@ class Appointment(BaseModel):
     )
     clinic: str | None = Field(
         default=None,
-        description="Nombre de la clínica o centro médico, o null si no se menciona.",
+        description="Nombre de la clínica, centro médico, doctor, o null si no se menciona.",
     )
     study: str | None = Field(
         default=None,

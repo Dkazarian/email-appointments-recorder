@@ -1,10 +1,10 @@
 ﻿from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from email import policy
 from email import message_from_bytes
 from email.header import decode_header, make_header
 from email.message import EmailMessage, Message
-from email.utils import getaddresses, parsedate_to_datetime, parseaddr
+from email.utils import format_datetime, getaddresses, parsedate_to_datetime, parseaddr
 from html.parser import HTMLParser
 import imaplib
 import re
@@ -133,6 +133,7 @@ class EmailClient:
         message["From"] = self.smtp_user
         message["To"] = recipient
         message["Subject"] = subject
+        message["Date"] = format_datetime(datetime.now(timezone.utc))
         message.set_content(body)
 
         if self._smtp_port == 465:

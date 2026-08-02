@@ -73,6 +73,30 @@ class AppointmentsExtractorTests(unittest.TestCase):
         self.assertEqual(failed[0].error, "Sin turno")
         self.assertIs(failed[0].mail, self.mail)
 
+    def test_parse_all_rejects_appointments_without_date(self):
+        ia_client = Mock()
+        ia_client.generate_structured_output.return_value = IAExtractionResponse(
+            extracted_appointments=[
+                AppointmentExtracted(
+                    email_id="42",
+                    patient_name="Ernesto",
+                    study="Radiografia",
+                    time="15:55",
+                )
+            ]
+        )
+        extractor = AppointmentsExtractor(ia_client)
+
+        extracted, failed = extractor.parse_all([self.mail])
+
+        self.assertEqual(extracted, [])
+        self.assertEqual(len(failed), 1)
+        self.assertEqual(
+            failed[0].error,
+            "El turno no contiene una fecha identificable",
+        )
+        self.assertIs(failed[0].mail, self.mail)
+
     def test_parse_all_uses_next_ia_client_when_first_one_fails(self):
         unavailable_client = Mock()
         unavailable_client.generate_structured_output.side_effect = RuntimeError(

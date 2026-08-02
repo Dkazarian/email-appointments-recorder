@@ -33,22 +33,32 @@ class AppointmentsExtractor:
 
     def _build_batch_prompt(self, emails: list[EmailItem]) -> str:
         prompt = (
-            "Analiza el siguiente lote de correos electrónicos y clasifícalos en el JSON de respuesta:\n"
-            "1. Si encuentras turnos, extrae los datos en 'extracted_appointments' vinculando su 'email_id'.\n"
-            "Un mismo correo puede informar varios turnos para el mismo paciente; en ese caso, "
-            "crea un elemento separado por cada turno y repite el mismo 'email_id'.\n"
-            "La primera línea suele contener el nombre del paciente y las líneas siguientes contienen "
-            "estudio, detalle, lugar, fecha y hora. En 'study' usa solo el tipo breve del estudio "
-            "y en 'study_detail' conserva la descripción completa; si no hay detalle adicional, repite el valor de study. "
-            "Usa el nombre del encabezado para cada turno. "
-            "Si aparece 'Paciente: X', usa exactamente X como patient_name; si aparece 'Clínica: X', "
-            "usa exactamente X como clinic. "
-            "Si el nombre del paciente no aparece en el cuerpo, puedes usar el asunto como posible patient_name "
-            "solo si claramente parece contener un nombre; no lo des por seguro si el asunto es ambiguo. "
-            "Extrae todos los datos que estén presentes; no uses null para un dato que aparezca en el texto.\n"
-            "2. Si un correo NO contiene ningún turno médico o es imposible de parsear, agrega su 'email_id' "
-            "junto con el motivo del fallo en la lista 'failed_emails'.\n\n"
-            "Sé estricto. Cada email_id provisto debe aparecer en alguna de las dos listas.\n\n"
+            "Analiza cada correo y devuelve exclusivamente el JSON definido por el esquema.\n\n"
+            "Para cada turno médico, agrega un objeto en 'extracted_appointments' y vincúlalo "
+            "con el 'email_id' exacto del correo. Si un correo contiene varios turnos, crea un "
+            "objeto por turno y repite el mismo 'email_id'.\n\n"
+            "Reglas de extracción:\n"
+            "- 'patient_name': si aparece 'Paciente: X', copia exactamente X.\n"
+            "  Si no aparece en el cuerpo, puedes usar el asunto como posible patient_name solo si "
+            "claramente parece contener un nombre; no lo des por seguro si el asunto es ambiguo.\n"
+            "- 'clinic': si aparece 'Clínica: X' o una variante con problemas de codificación como "
+            "'ClÃ­nica: X', copia exactamente el nombre de la clínica.\n"
+            "- 'study': usa el tipo breve del estudio.\n"
+            "- 'study_detail': conserva la descripción completa; si no hay detalle adicional, repite 'study'.\n"
+            "- 'date': es la fecha del turno, no la fecha del correo. Si aparece 'Fecha: DD/MM/YYYY', "
+            "DEBES copiar 'DD/MM/YYYY' en 'date'. Nunca devuelvas null para 'date' cuando una fecha "
+            "aparezca explícitamente en el contenido. Si falta el año, conserva 'DD/MM'.\n"
+            "- 'time': si aparece 'Hora: HH:MM', copia la hora en formato de 24 horas.\n"
+            "Extrae todos los campos presentes. Usa null únicamente cuando el dato no figure en el correo. "
+            "No inventes valores ni confundas la fecha del turno con la fecha de recepción del correo.\n\n"
+            "La fecha del turno es obligatoria: si no puedes identificarla, NO agregues un objeto en "
+            "'extracted_appointments'; agrega el correo en 'failed_emails' indicando que falta la fecha.\n\n"
+            "Ejemplo: para 'Clínica: Centro Norte; Fecha: 31/12/2026; Hora: 23:59', "
+            "la extracción debe contener 'clinic': 'Centro Norte', 'date': '31/12/2026' y "
+            "'time': '23:59'.\n\n"
+            "Si un correo no contiene ningún turno médico o es imposible de procesar, agrega su "
+            "'email_id' y un motivo breve en 'failed_emails'. Cada email_id provisto debe aparecer "
+            "exactamente en una de las dos listas.\n\n"
         )
         for mail in emails:
             prompt += f"=== INICIO CORREO ID: {mail.uid} ===\n"
@@ -87,6 +97,14 @@ class AppointmentsExtractor:
         for appt in gemini_result.extracted_appointments:
             original_mail = email_map.get(appt.email_id)
             if original_mail:
+                if not appt.date or not appt.date.strip():
+                    failed_list.append(
+                        FailedItem(
+                            error="El turno no contiene una fecha identificable",
+                            mail=original_mail,
+                        )
+                    )
+                    continue
                 extracted_list.append(SuccessItem(appointment=appt, mail=original_mail))
 
         for failed_info in gemini_result.failed_emails:

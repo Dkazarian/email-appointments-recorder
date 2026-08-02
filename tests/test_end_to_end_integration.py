@@ -10,6 +10,7 @@ from gspread.exceptions import WorksheetNotFound
 
 from app.config import load_config, load_dotenv_file, load_google_credentials
 from app.email_client import EmailClient
+from app.ia_clients import GeminiIAClient, LocalIAClient, OpenRouterIAClient
 from app.main import run
 
 
@@ -27,11 +28,22 @@ class EndToEndIntegrationTests(unittest.TestCase):
         # test-specific values.
         load_dotenv_file(".env")
         cls.config = load_config()
+        cls.ia_provider = os.getenv("E2E_IA_PROVIDER", "local").strip().lower()
+        if cls.ia_provider not in {"local", "gemini", "openrouter"}:
+            raise unittest.SkipTest(
+                "E2E_IA_PROVIDER must be one of: local, gemini, openrouter"
+            )
+        if cls.ia_provider == "gemini" and not cls.config.gemini_ia_api_key:
+            raise unittest.SkipTest("GEMINI_IA_API_KEY must be configured")
+        if cls.ia_provider == "openrouter" and not (
+            cls.config.openrouter_api_key and cls.config.open_router_model
+        ):
+            raise unittest.SkipTest(
+                "OPENROUTER_API_KEY and OPEN_ROUTER_MODEL must be configured"
+            )
         test_sheet_id = cls.config.database["sheet_id"]
         if not test_sheet_id:
             raise unittest.SkipTest("SHEET_ID must be configured in .env.test")
-        if not cls.config.local_ia_enabled:
-            raise unittest.SkipTest("LOCAL_IA_ENABLED must be true")
         cls.credentials = load_google_credentials(
             cls.config.database["credentials"]
         )
@@ -50,13 +62,13 @@ class EndToEndIntegrationTests(unittest.TestCase):
                 f"The test spreadsheet must contain a {cls.config.database['email_table_name']} worksheet"
             )
 
-    def test_email_to_local_ia_to_sheets_and_reply(self):
+    def test_email_to_selected_ia_to_sheets_and_reply(self):
         marker = uuid.uuid4().hex[:12]
         subject = f"E2E-turno-{marker}"
         body = (
             f"Paciente: E2E Paciente {marker}\n"
             "Turno - Estudio: Radiografia; Detalle: Radiografia mano izquierda; "
-            "Clínica: E2E Clinica; Fecha: 31/12/2026; Hora: 23:59"
+            "Clínica: E2E Clinica; Fecha: 27/12/2026; Hora: 14:30"
         )
         reply_subject = f"Re: {subject}"
 
@@ -66,6 +78,7 @@ class EndToEndIntegrationTests(unittest.TestCase):
 
         test_config = replace(
             self.config,
+            local_ia_enabled=self.ia_provider == "local",
             imap={
                 **self.config.imap,
                 "search": f'HEADER Subject "{subject}"',
@@ -73,7 +86,14 @@ class EndToEndIntegrationTests(unittest.TestCase):
             allowed_senders=self.config.allowed_senders
             | {self.config.smtp["username"].lower()},
         )
-        run(config=test_config, max_cycles=1, sleep=lambda _: None)
+        run(
+            config=test_config,
+            max_cycles=1,
+            sleep=lambda _: None,
+            **{
+                f"{self.ia_provider}_ia_client_factory": self._printing_ia_client_factory()
+            },
+        )
 
         processed = self._wait_for_email(subject, self.config.processed_folder)
         self.assertIsNotNone(processed, "The E2E email was not moved to processed")
@@ -90,8 +110,8 @@ class EndToEndIntegrationTests(unittest.TestCase):
         self.assertEqual(appointment_rows[0][1], "Radiografia")
         self.assertEqual(appointment_rows[0][2], "Radiografia mano izquierda")
         self.assertEqual(appointment_rows[0][3], "E2E Clinica")
-        self.assertEqual(appointment_rows[0][4], "31/12/2026")
-        self.assertEqual(appointment_rows[0][5], "23:59:00")
+        self.assertEqual(appointment_rows[0][4], "27/12/2026")
+        self.assertEqual(appointment_rows[0][5], "14:30:00")
 
         email_rows = self._wait_for_rows(
             self.email_sheet,
@@ -104,6 +124,31 @@ class EndToEndIntegrationTests(unittest.TestCase):
         if os.getenv("KEEP_END_TO_END_DATA") != "1":
             self._clean_emails(subject, reply_subject)
             self._clean_sheet_rows(marker)
+
+    def _printing_ia_client_factory(self):
+        client_factories = {
+            "local": LocalIAClient,
+            "gemini": GeminiIAClient,
+            "openrouter": OpenRouterIAClient,
+        }
+        client_factory = client_factories[self.ia_provider]
+        provider = self.ia_provider.upper()
+
+        def factory(*args, **kwargs):
+            client = client_factory(*args, **kwargs)
+            generate_structured_output = client.generate_structured_output
+
+            def generate(prompt, response_schema):
+                response = generate_structured_output(prompt, response_schema)
+                print(f"[{provider} IA RESPONSE]")
+                print(response.model_dump_json(indent=2))
+                print(f"[/{provider} IA RESPONSE]", flush=True)
+                return response
+
+            client.generate_structured_output = generate
+            return client
+
+        return factory
 
     def _wait_for_rows(self, worksheet, predicate):
         deadline = time.monotonic() + int(
