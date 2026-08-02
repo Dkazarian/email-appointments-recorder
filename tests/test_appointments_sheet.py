@@ -101,6 +101,7 @@ class AppointmentsSheetTests(unittest.TestCase):
             "secretaria@gmail.com",
             "clinica@example.com, planilla@example.com",
             "https://mail.google.com/mail/u/0/#search/example",
+            "Radiografia 24/3 15:55",
         ])
 
 

@@ -25,6 +25,7 @@ headers = [
     "Remitente",
     "Destinatarios",
     "URL",
+    "Texto del mail",
 ]
 
 class AppointmentsSheet:
@@ -98,4 +99,5 @@ class AppointmentsSheet:
             email.sender,
             ", ".join(email.recipients),
             email.url or "",
+            email.body,
         ]
