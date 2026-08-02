@@ -13,6 +13,10 @@ class Config:
     gemini_ia_model: str
     openrouter_api_key: str | None
     open_router_model: str | None
+    local_ia_enabled: bool
+    local_ia_base_url: str
+    local_ia_model: str
+    local_ia_timeout_seconds: int
     interval_minutes: int
     database: object
 
@@ -52,6 +56,10 @@ def load_config() -> Config:
         gemini_ia_model=os.getenv("GEMINI_IA_MODEL", "gemini-2.0-flash"),
         openrouter_api_key=os.getenv("OPENROUTER_API_KEY"),
         open_router_model=os.getenv("OPEN_ROUTER_MODEL"),
+        local_ia_enabled=os.getenv("LOCAL_IA_ENABLED", "false").lower() == "true",
+        local_ia_base_url=os.getenv("LOCAL_IA_BASE_URL", "http://localhost:1234/v1"),
+        local_ia_model=os.getenv("LOCAL_IA_MODEL", "google_gemma-3-4b-it"),
+        local_ia_timeout_seconds=int(os.getenv("LOCAL_IA_TIMEOUT_SECONDS", "300")),
         interval_minutes=int(os.getenv("INTERVAL_MINUTES"))
     )
 

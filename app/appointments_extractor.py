@@ -39,6 +39,8 @@ class AppointmentsExtractor:
             "crea un elemento separado por cada turno y repite el mismo 'email_id'.\n"
             "La primera línea suele contener el nombre del paciente y las líneas siguientes contienen "
             "estudio, lugar, fecha y hora. Usa el nombre del encabezado para cada turno del correo. "
+            "Si aparece 'Paciente: X', usa exactamente X como patient_name; si aparece 'Clínica: X', "
+            "usa exactamente X como clinic. "
             "Extrae todos los datos que estén presentes; no uses null para un dato que aparezca en el texto.\n"
             "2. Si un correo NO contiene ningún turno médico o es imposible de parsear, agrega su 'email_id' "
             "junto con el motivo del fallo en la lista 'failed_emails'.\n\n"

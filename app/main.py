@@ -9,9 +9,9 @@ from .appointments_extractor import AppointmentsExtractor
 from .appointments_sheet import AppointmentsSheet
 from .config import load_config
 from .email_client import EmailClient
-from .gemini_ia_client import GeminiIAClient
+from .ia_clients import GeminiIAClient, LocalIAClient
 from .logger import Logger
-from .openrouter_ia_client import OpenRouterIAClient
+from .ia_clients import OpenRouterIAClient
 
 
 def process_batch(email_client, extractor, sheets, logger) -> None:
@@ -45,6 +45,7 @@ def run(
     extractor_factory: Callable = AppointmentsExtractor,
     gemini_ia_client_factory: Callable = GeminiIAClient,
     openrouter_ia_client_factory: Callable = OpenRouterIAClient,
+    local_ia_client_factory: Callable = LocalIAClient,
     sheets_factory: Callable = AppointmentsSheet,
     logger_factory: Callable = Logger,
     sleep: Callable = time.sleep,
@@ -59,16 +60,30 @@ def run(
     credentials = json.loads(
         config.database["credentials"].read_text(encoding="utf-8")
     )
-    ia_clients = []
-    if config.gemini_ia_api_key:
-        ia_clients.append(gemini_ia_client_factory(config.gemini_ia_api_key, config.gemini_ia_model))
-    if config.openrouter_api_key and config.open_router_model:
-        ia_clients.append(
-            openrouter_ia_client_factory(
-                config.openrouter_api_key,
-                config.open_router_model,
+    if config.local_ia_enabled:
+        ia_clients = [
+            local_ia_client_factory(
+                config.local_ia_base_url,
+                config.local_ia_model,
+                config.local_ia_timeout_seconds,
             )
-        )
+        ]
+    else:
+        ia_clients = []
+        if config.gemini_ia_api_key:
+            ia_clients.append(
+                gemini_ia_client_factory(
+                    config.gemini_ia_api_key,
+                    config.gemini_ia_model,
+                )
+            )
+        if config.openrouter_api_key and config.open_router_model:
+            ia_clients.append(
+                openrouter_ia_client_factory(
+                    config.openrouter_api_key,
+                    config.open_router_model,
+                )
+            )
     if not ia_clients:
         raise ValueError("At least one IA client must be configured")
     extractor = extractor_factory(ia_clients)
@@ -76,6 +91,7 @@ def run(
         credentials,
         config.database["sheet_id"],
         config.database["table_name"],
+        config.database["email_table_name"],
     )
     logger = logger_factory()
 
