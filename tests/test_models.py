@@ -18,6 +18,7 @@ class AppointmentTests(unittest.TestCase):
             "patient_name": "Ernesto",
             "clinic": "Clinica Rosa",
             "study": "Radiografia",
+            "study_detail": None,
             "date": "24/3",
             "time": "15:55",
         })
@@ -28,6 +29,7 @@ class AppointmentTests(unittest.TestCase):
         self.assertIsNone(appointment.clinic)
         self.assertIsNone(appointment.date)
         self.assertIsNone(appointment.time)
+        self.assertIsNone(appointment.study_detail)
 
     def test_rejects_fields_not_in_the_extraction_schema(self):
         with self.assertRaises(ValueError):

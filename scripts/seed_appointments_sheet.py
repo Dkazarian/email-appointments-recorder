@@ -39,6 +39,14 @@ STUDIES = [
     "Laboratorio",
 ]
 
+STUDY_DETAILS = [
+    "Radiografia mano izquierda",
+    "Ecografia abdominal",
+    "Tomografia de torax",
+    "Resonancia magnetica de rodilla",
+    "Laboratorio de sangre completo",
+]
+
 CLINICS = [
     "Clínica Central",
     "Sanatorio Norte",
@@ -102,6 +110,7 @@ def seed_records(count: int) -> list[tuple[EmailItem, Appointment]]:
         appointment = Appointment(
             patient_name=PATIENTS[(index - 1) % len(PATIENTS)],
             study=STUDIES[(index - 1) % len(STUDIES)],
+            study_detail=STUDY_DETAILS[(index - 1) % len(STUDY_DETAILS)],
             clinic=CLINICS[(index - 1) % len(CLINICS)],
             date=appointment_date.strftime("%d/%m/%Y"),
             time=appointment_date.strftime("%H:%M:%S"),
@@ -117,6 +126,7 @@ def seed_records(count: int) -> list[tuple[EmailItem, Appointment]]:
                 [
                     f"Paciente: {appointment.patient_name}",
                     f"Estudio: {appointment.study}",
+                    f"Detalle: {appointment.study_detail}",
                     f"Clínica: {appointment.clinic}",
                     f"Fecha del turno: {appointment.date}",
                     f"Hora del turno: {appointment.time}",
@@ -150,8 +160,8 @@ def format_date_columns(spreadsheet, worksheet_id: int, email_worksheet_id: int)
                         "range": {
                             "sheetId": worksheet_id,
                             "startRowIndex": 1,
-                            "startColumnIndex": 3,
-                            "endColumnIndex": 4,
+                            "startColumnIndex": 4,
+                            "endColumnIndex": 5,
                         },
                         "cell": {
                             "userEnteredFormat": {
@@ -169,8 +179,8 @@ def format_date_columns(spreadsheet, worksheet_id: int, email_worksheet_id: int)
                         "range": {
                             "sheetId": worksheet_id,
                             "startRowIndex": 1,
-                            "startColumnIndex": 4,
-                            "endColumnIndex": 5,
+                            "startColumnIndex": 5,
+                            "endColumnIndex": 6,
                         },
                         "cell": {
                             "userEnteredFormat": {
@@ -188,8 +198,8 @@ def format_date_columns(spreadsheet, worksheet_id: int, email_worksheet_id: int)
                         "range": {
                             "sheetId": worksheet_id,
                             "startRowIndex": 1,
-                            "startColumnIndex": 8,
-                            "endColumnIndex": 9,
+                            "startColumnIndex": 9,
+                            "endColumnIndex": 10,
                         },
                         "cell": {
                             "userEnteredFormat": {
@@ -242,7 +252,7 @@ def main() -> None:
     )
 
     if worksheet.row_values(1) != headers:
-        worksheet.update(values=[headers], range_name="A1:M1")
+        worksheet.update(values=[headers], range_name="A1:N1")
     if email_worksheet.row_values(1) != email_headers:
         email_worksheet.update(values=[email_headers], range_name="A1:G1")
 

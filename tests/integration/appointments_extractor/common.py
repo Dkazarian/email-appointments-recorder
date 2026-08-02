@@ -17,7 +17,7 @@ EMAILS = [
             "Paciente: Ana Perez\n"
             "Turno 1 - Estudio: Laboratorio; Clínica: Clinica Central; "
             "Fecha: 24/03; Hora: 15:30\n"
-            "Turno 2 - Estudio: Radiografia mano izquierda; "
+            "Turno 2 - Estudio: Radiografia; Detalle: Radiografia mano izquierda; "
             "Clínica: Centro Norte; Fecha: 25/03; Hora: 09:00"
         ),
     ),
@@ -31,7 +31,7 @@ EMAILS = [
         sent_at=None,
         body=(
             "Paciente: Juan Gomez\n"
-            "Turno 1 - Estudio: Radiografia mano izquierda; "
+            "Turno 1 - Estudio: Radiografia; Detalle: Radiografia mano izquierda; "
             "Clínica: Centro Dos; Fecha: 14/05; Hora: 19:30\n"
             "Turno 2 - Estudio: Audiometria; Clínica: Calle 123; "
             "Fecha: 15/05; Hora: 10:30"
@@ -73,4 +73,4 @@ def assert_two_email_extraction(test_case: unittest.TestCase, provider_name, ia_
         )
     )
     studies = {appointment.study for appointment in appointments_by_email["email-2"]}
-    test_case.assertEqual(studies, {"Radiografia mano izquierda", "Audiometria"})
+    test_case.assertEqual(studies, {"Radiografia", "Audiometria"})

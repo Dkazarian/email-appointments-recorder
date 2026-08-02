@@ -22,6 +22,7 @@ class AppointmentsSheetTests(unittest.TestCase):
         self.appointment = Appointment(
             patient_name="Ernesto",
             study="Radiografia",
+            study_detail="Radiografia mano izquierda",
             clinic="Clinica Rosa",
             date="24/03/2025",
             time="15:55",
@@ -82,10 +83,10 @@ class AppointmentsSheetTests(unittest.TestCase):
         self.assertEqual(len(rows[0]), len(headers))
         self.assertEqual(rows[0][0], "Ernesto")
         self.assertEqual(rows[1][0], "Ana")
-        self.assertEqual(rows[0][4], "15:55:00")
-        self.assertEqual(rows[0][5], "PENDIENTE")
-        self.assertEqual(rows[0][6], "")
-        self.assertEqual(rows[0][7], "42")
+        self.assertEqual(rows[0][5], "15:55:00")
+        self.assertEqual(rows[0][6], "PENDIENTE")
+        self.assertEqual(rows[0][7], "")
+        self.assertEqual(rows[0][8], "42")
 
     def test_headers_and_row_match(self):
         row = AppointmentsSheet.email_and_appointment_to_row(
@@ -96,6 +97,7 @@ class AppointmentsSheetTests(unittest.TestCase):
         self.assertEqual(row, [
             "Ernesto",
             "Radiografia",
+            "Radiografia mano izquierda",
             "Clinica Rosa",
             "24/03/2025",
             "15:55:00",

@@ -32,6 +32,7 @@ class AppointmentsExtractorTests(unittest.TestCase):
                     email_id="42",
                     patient_name="Ernesto",
                     study="Radiografia",
+                    study_detail="Radiografia mano izquierda",
                     date="24/3",
                     time="15:55",
                 )
@@ -47,6 +48,15 @@ class AppointmentsExtractorTests(unittest.TestCase):
         self.assertEqual(extracted[0].appointment.patient_name, "Ernesto")
         self.assertEqual(failed, [])
         ia_client.generate_structured_output.assert_called_once()
+
+    def test_prompt_includes_subject_for_missing_patient_names(self):
+        extractor = AppointmentsExtractor(Mock())
+
+        prompt = extractor._build_batch_prompt([self.mail])
+
+        self.assertIn("Asunto: Turno", prompt)
+        self.assertIn("puedes usar el asunto como posible patient_name", prompt)
+        self.assertIn("si el asunto es ambiguo", prompt)
 
     def test_parse_all_maps_failures_back_to_emails(self):
         ia_client = Mock()

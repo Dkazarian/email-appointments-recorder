@@ -12,6 +12,7 @@ class SheetsError(Exception):
 headers = [
     "Paciente",
     "Estudio",
+    "Detalle",
     "Clínica",
     "Fecha del turno",
     "Hora del turno",
@@ -114,6 +115,7 @@ class AppointmentsSheet:
         return [
             appointment.patient_name or "",
             appointment.study or "",
+            appointment.study_detail or "",
             appointment.clinic or "",
             AppointmentsSheet._appointment_date(appointment),
             AppointmentsSheet._appointment_time(appointment),

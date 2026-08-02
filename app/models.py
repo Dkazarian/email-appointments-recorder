@@ -17,6 +17,10 @@ class Appointment(BaseModel):
         default=None,
         description="Estudio médico o examen solicitado, conservando el texto en español.",
     )
+    study_detail: str | None = Field(
+        default=None,
+        description="Full study description as it appears in the email.",
+    )
     date: str | None = Field(
         default=None,
         description=(

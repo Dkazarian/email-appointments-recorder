@@ -38,9 +38,13 @@ class AppointmentsExtractor:
             "Un mismo correo puede informar varios turnos para el mismo paciente; en ese caso, "
             "crea un elemento separado por cada turno y repite el mismo 'email_id'.\n"
             "La primera línea suele contener el nombre del paciente y las líneas siguientes contienen "
-            "estudio, lugar, fecha y hora. Usa el nombre del encabezado para cada turno del correo. "
+            "estudio, detalle, lugar, fecha y hora. En 'study' usa solo el tipo breve del estudio "
+            "y en 'study_detail' conserva la descripción completa; si no hay detalle adicional, repite el valor de study. "
+            "Usa el nombre del encabezado para cada turno. "
             "Si aparece 'Paciente: X', usa exactamente X como patient_name; si aparece 'Clínica: X', "
             "usa exactamente X como clinic. "
+            "Si el nombre del paciente no aparece en el cuerpo, puedes usar el asunto como posible patient_name "
+            "solo si claramente parece contener un nombre; no lo des por seguro si el asunto es ambiguo. "
             "Extrae todos los datos que estén presentes; no uses null para un dato que aparezca en el texto.\n"
             "2. Si un correo NO contiene ningún turno médico o es imposible de parsear, agrega su 'email_id' "
             "junto con el motivo del fallo en la lista 'failed_emails'.\n\n"
@@ -48,6 +52,7 @@ class AppointmentsExtractor:
         )
         for mail in emails:
             prompt += f"=== INICIO CORREO ID: {mail.uid} ===\n"
+            prompt += f"Asunto: {mail.subject}\n"
             prompt += f"Contenido:\n{mail.body}\n"
             prompt += f"=== FIN CORREO ID: {mail.uid} ===\n\n"
         return prompt
