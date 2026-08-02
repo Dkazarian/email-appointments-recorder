@@ -47,4 +47,11 @@ class GeminiIAClient:
                 temperature=0.1,
             ),
         )
-        return response.parsed
+        parsed = response.parsed
+        if isinstance(parsed, response_schema):
+            return parsed
+        if isinstance(parsed, dict):
+            return response_schema.model_validate(parsed)
+        raise RuntimeError(
+            f"Gemini returned an unsupported parsed response type: {type(parsed).__name__}"
+        )

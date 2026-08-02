@@ -1,6 +1,7 @@
+import json
 import unittest
 
-from app.appointments_extractor import AppointmentsExtractor
+from app.appointments_extractor import IAExtractionResponse, AppointmentsExtractor
 from app.email_client import EmailItem
 
 
@@ -41,7 +42,25 @@ EMAILS = [
 
 
 def assert_two_email_extraction(test_case: unittest.TestCase, provider_name, ia_client):
-    extractor = AppointmentsExtractor([ia_client])
+    prompt = AppointmentsExtractor([])._build_batch_prompt(EMAILS)
+    raw_response = ia_client.generate_structured_output(
+        prompt=prompt,
+        response_schema=IAExtractionResponse,
+    )
+    if hasattr(raw_response, "model_dump"):
+        printable_response = raw_response.model_dump()
+    else:
+        printable_response = raw_response
+    print(
+        f"\n{provider_name} raw response:\n"
+        + json.dumps(printable_response, ensure_ascii=False, indent=2, default=str)
+    )
+
+    class StaticIAClient:
+        def generate_structured_output(self, prompt, response_schema):
+            return raw_response
+
+    extractor = AppointmentsExtractor([StaticIAClient()])
     extracted, failed = extractor.parse_all(EMAILS)
 
     print(

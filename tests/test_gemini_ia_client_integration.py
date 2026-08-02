@@ -4,7 +4,7 @@ import unittest
 from pydantic import BaseModel
 
 from app.config import load_dotenv_file
-from app.gemini_ia_client import GeminiIAClient
+from app.ia_clients import GeminiIAClient
 
 
 # Load the repository's .env before checking the opt-in flag or API key.

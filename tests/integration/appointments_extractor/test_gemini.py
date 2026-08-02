@@ -2,7 +2,7 @@ import os
 import unittest
 
 from app.config import load_dotenv_file
-from app.gemini_ia_client import GeminiIAClient
+from app.ia_clients import GeminiIAClient
 
 from .common import assert_two_email_extraction
 

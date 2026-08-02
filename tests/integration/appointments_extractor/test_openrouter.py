@@ -2,7 +2,7 @@ import os
 import unittest
 
 from app.config import load_dotenv_file
-from app.openrouter_ia_client import OpenRouterIAClient
+from app.ia_clients import OpenRouterIAClient
 
 from .common import assert_two_email_extraction
 
