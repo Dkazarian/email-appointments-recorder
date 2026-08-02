@@ -1,4 +1,5 @@
 ﻿from dataclasses import dataclass
+import json
 import os
 from pathlib import Path
 
@@ -46,7 +47,7 @@ def load_config() -> Config:
             if sender.strip()
         },
         database= {
-            "credentials": Path(os.getenv("GOOGLE_CREDENTIALS")),
+            "credentials": os.getenv("GOOGLE_CREDENTIALS"),
             "sheet_id": os.getenv("SHEET_ID"),
             "table_name": os.getenv("SHEET_TABLE", "Turnos"),
             "email_table_name": os.getenv("SHEET_EMAIL_TABLE", "Correos"),
@@ -77,3 +78,23 @@ def load_dotenv_file(path: str = ".env") -> None:
         key = key.strip()
         value = value.strip().strip('"').strip("'")
         os.environ.setdefault(key, value)
+
+
+def load_google_credentials(raw_credentials: str | None) -> dict:
+    if not raw_credentials:
+        raise ValueError("GOOGLE_CREDENTIALS is not configured")
+
+    raw_credentials = raw_credentials.strip()
+    try:
+        return json.loads(raw_credentials)
+    except json.JSONDecodeError:
+        pass
+
+    if len(raw_credentials) < 240:
+        credentials_path = Path(raw_credentials)
+        if credentials_path.is_file():
+            return json.loads(credentials_path.read_text(encoding="utf-8"))
+
+    raise ValueError(
+        "GOOGLE_CREDENTIALS must contain service-account JSON or a valid JSON file path"
+    )

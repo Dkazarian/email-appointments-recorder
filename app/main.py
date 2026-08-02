@@ -7,7 +7,7 @@ from google.genai.errors import ServerError
 
 from .appointments_extractor import AppointmentsExtractor
 from .appointments_sheet import AppointmentsSheet
-from .config import load_config
+from .config import load_config, load_google_credentials
 from .email_client import EmailClient
 from .ia_clients import GeminiIAClient, LocalIAClient
 from .logger import Logger
@@ -57,9 +57,7 @@ def run(
     usable in integration tests without connecting to external services.
     """
     config = config or load_config()
-    credentials = json.loads(
-        config.database["credentials"].read_text(encoding="utf-8")
-    )
+    credentials = load_google_credentials(config.database["credentials"])
     if config.local_ia_enabled:
         ia_clients = [
             local_ia_client_factory(
