@@ -66,9 +66,10 @@ class EndToEndIntegrationTests(unittest.TestCase):
         marker = uuid.uuid4().hex[:12]
         subject = f"E2E-turno-{marker}"
         body = (
-            f"Paciente: E2E Paciente {marker}\n"
-            "Turno - Estudio: Radiografia; Detalle: Radiografia mano izquierda; "
-            "Clínica: E2E Clinica; Fecha: 27/12/2026; Hora: 14:30"
+            f"Pablo Gonzalez {marker}\n"
+            "Radiografia mano izquierda\n"
+            "Clinica E2E\n"
+            "27/12/2026 14:30"
         )
         reply_subject = f"Re: {subject}"
 
@@ -106,10 +107,10 @@ class EndToEndIntegrationTests(unittest.TestCase):
             lambda row: self._row_contains(row, marker, subject),
         )
         self.assertEqual(len(appointment_rows), 1)
-        self.assertEqual(appointment_rows[0][0], f"E2E Paciente {marker}")
+        self.assertEqual(appointment_rows[0][0], "Pablo Gonzalez")
         self.assertEqual(appointment_rows[0][1], "Radiografia")
-        self.assertEqual(appointment_rows[0][2], "Radiografia mano izquierda")
-        self.assertEqual(appointment_rows[0][3], "E2E Clinica")
+        self.assertEqual(appointment_rows[0][2], "mano izquierda")
+        self.assertEqual(appointment_rows[0][3], "Clinica E2E")
         self.assertEqual(appointment_rows[0][4], "27/12/2026")
         self.assertEqual(appointment_rows[0][5], "14:30:00")
 
@@ -118,6 +119,8 @@ class EndToEndIntegrationTests(unittest.TestCase):
             lambda row: self._row_contains(row, marker, subject),
         )
         self.assertEqual(len(email_rows), 1)
+        self.assertTrue(email_rows[0][5], "The email URL was not populated")
+        self.assertTrue(appointment_rows[0][13], "The appointment URL was not populated")
         stored_body = email_rows[0][-1].replace("\r\n", "\n")
         self.assertIn(body, stored_body)
 
@@ -192,7 +195,7 @@ class EndToEndIntegrationTests(unittest.TestCase):
         while time.monotonic() < deadline:
             with self._client(
                 folder=folder,
-                search=f'HEADER Subject "{subject}"',
+                search="ALL",
             ) as client:
                 email = next(
                     (mail for mail in client.fetch(100) if mail.subject == subject),

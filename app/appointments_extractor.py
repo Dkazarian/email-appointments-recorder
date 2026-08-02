@@ -28,8 +28,9 @@ class FailedItem(NamedTuple):
 
 
 class AppointmentsExtractor:
-    def __init__(self, ia_clients):
+    def __init__(self, ia_clients, process_emails_individually: bool = False):
         self.ia_clients = list(ia_clients) if isinstance(ia_clients, (list, tuple)) else [ia_clients]
+        self.process_emails_individually = process_emails_individually
 
     def _build_batch_prompt(self, emails: list[EmailItem]) -> str:
         prompt = (
@@ -68,7 +69,18 @@ class AppointmentsExtractor:
         return prompt
 
     def parse_all(self, emails: list[EmailItem]) -> tuple[list[SuccessItem], list[FailedItem]]:
-   
+        if len(emails) > 1 and self.process_emails_individually:
+            extracted_list: list[SuccessItem] = []
+            failed_list: list[FailedItem] = []
+            for email in emails:
+                extracted, failed = self._parse_batch([email])
+                extracted_list.extend(extracted)
+                failed_list.extend(failed)
+            return extracted_list, failed_list
+
+        return self._parse_batch(emails)
+
+    def _parse_batch(self, emails: list[EmailItem]) -> tuple[list[SuccessItem], list[FailedItem]]:
         extracted_list: list[SuccessItem] = []
         failed_list: list[FailedItem] = []
 
@@ -96,6 +108,10 @@ class AppointmentsExtractor:
 
         for appt in gemini_result.extracted_appointments:
             original_mail = email_map.get(appt.email_id)
+            if original_mail is None and len(emails) == 1:
+                # Some local models fail to copy an opaque UID even when the
+                # batch contains only one email. The sole email is unambiguous.
+                original_mail = emails[0]
             if original_mail:
                 if not appt.date or not appt.date.strip():
                     failed_list.append(
@@ -109,6 +125,8 @@ class AppointmentsExtractor:
 
         for failed_info in gemini_result.failed_emails:
             original_mail = email_map.get(failed_info.email_id)
+            if original_mail is None and len(emails) == 1:
+                original_mail = emails[0]
             if original_mail:
                 failed_list.append(FailedItem(error=failed_info.error_message, mail=original_mail))
 

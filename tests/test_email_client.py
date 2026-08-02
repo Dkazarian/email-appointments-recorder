@@ -226,6 +226,7 @@ class EmailClientTests(unittest.TestCase):
         self.assertEqual(sent_message["To"], "recipient@example.com")
         self.assertEqual(sent_message["Subject"], "Subject")
         self.assertTrue(sent_message["Date"])
+        self.assertTrue(sent_message["Message-ID"])
         self.assertIn("Body", sent_message.get_content())
 
     def test_delete_marks_uid_deleted_and_expunges(self):

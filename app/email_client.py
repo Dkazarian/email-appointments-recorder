@@ -4,7 +4,13 @@ from email import policy
 from email import message_from_bytes
 from email.header import decode_header, make_header
 from email.message import EmailMessage, Message
-from email.utils import format_datetime, getaddresses, parsedate_to_datetime, parseaddr
+from email.utils import (
+    format_datetime,
+    getaddresses,
+    make_msgid,
+    parsedate_to_datetime,
+    parseaddr,
+)
 from html.parser import HTMLParser
 import imaplib
 import re
@@ -134,6 +140,7 @@ class EmailClient:
         message["To"] = recipient
         message["Subject"] = subject
         message["Date"] = format_datetime(datetime.now(timezone.utc))
+        message["Message-ID"] = make_msgid()
         message.set_content(body)
 
         if self._smtp_port == 465:

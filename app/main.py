@@ -84,7 +84,14 @@ def run(
             )
     if not ia_clients:
         raise ValueError("At least one IA client must be configured")
-    extractor = extractor_factory(ia_clients)
+    process_emails_individually = config.local_ia_enabled or (
+        not config.gemini_ia_api_key
+        and bool(config.openrouter_api_key and config.open_router_model)
+    )
+    extractor = extractor_factory(
+        ia_clients,
+        process_emails_individually=process_emails_individually,
+    )
     sheets = sheets_factory(
         credentials,
         config.database["sheet_id"],

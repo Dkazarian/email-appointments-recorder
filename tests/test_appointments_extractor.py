@@ -97,6 +97,46 @@ class AppointmentsExtractorTests(unittest.TestCase):
         )
         self.assertIs(failed[0].mail, self.mail)
 
+    def test_parse_all_maps_unknown_id_to_sole_email(self):
+        ia_client = Mock()
+        ia_client.generate_structured_output.return_value = IAExtractionResponse(
+            extracted_appointments=[
+                AppointmentExtracted(
+                    email_id="model-generated-id",
+                    patient_name="Ernesto",
+                    study="Radiografia",
+                    date="24/03/2026",
+                )
+            ]
+        )
+        extractor = AppointmentsExtractor(ia_client)
+
+        extracted, failed = extractor.parse_all([self.mail])
+
+        self.assertEqual(len(extracted), 1)
+        self.assertIs(extracted[0].mail, self.mail)
+        self.assertEqual(failed, [])
+
+    def test_parse_all_processes_each_email_individually_for_marked_ia(self):
+        ia_client = Mock()
+        ia_client.generate_structured_output.return_value = IAExtractionResponse(
+            extracted_appointments=[
+                AppointmentExtracted(
+                    email_id="42",
+                    patient_name="Ernesto",
+                    study="Radiografia",
+                    date="24/03/2026",
+                )
+            ]
+        )
+        extractor = AppointmentsExtractor(ia_client, process_emails_individually=True)
+
+        extracted, failed = extractor.parse_all([self.mail, self.mail])
+
+        self.assertEqual(len(extracted), 2)
+        self.assertEqual(failed, [])
+        self.assertEqual(ia_client.generate_structured_output.call_count, 2)
+
     def test_parse_all_uses_next_ia_client_when_first_one_fails(self):
         unavailable_client = Mock()
         unavailable_client.generate_structured_output.side_effect = RuntimeError(
