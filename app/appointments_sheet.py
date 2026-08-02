@@ -2,8 +2,6 @@ from datetime import datetime
 from typing import Any
 
 import gspread
-from gspread.utils import rowcol_to_a1
-
 from app.email_client import EmailItem
 from app.models import Appointment
 
@@ -25,6 +23,15 @@ headers = [
     "Remitente",
     "Destinatarios",
     "URL",
+]
+
+email_headers = [
+    "UID",
+    "Fecha del mail",
+    "Asunto",
+    "Remitente",
+    "Destinatarios",
+    "URL",
     "Texto del mail",
 ]
 
@@ -34,25 +41,44 @@ class AppointmentsSheet:
         credentials: dict[str, Any],
         spreadsheet_id: str,
         table_name: str,
+        email_table_name: str = "Correos",
     ) -> None:
         self.gc = gspread.service_account_from_dict(credentials)
         self.spreadsheet = self.gc.open_by_key(spreadsheet_id)
         self.table_name = table_name
+        self.email_table_name = email_table_name
 
     def add_appointments(self, appointments: list[tuple[EmailItem, Appointment]]) -> None:
-        self.append_rows_to_table(
+        if not appointments:
+            return
+
+        unique_emails = dict((email.uid, email) for email, _ in appointments)
+        self._append_rows(
+            self.email_table_name,
+            [self.email_to_row(email) for email in unique_emails.values()],
+        )
+        self._append_rows(
+            self.table_name,
             [
                 self.email_and_appointment_to_row(email, appointment)
                 for email, appointment in appointments
-            ]
+            ],
         )
 
     def append_rows_to_table(self, rows_data: list[list[str]]) -> None:
+        self._append_rows(self.table_name, rows_data)
+
+    def _append_rows(
+        self,
+        table_name: str,
+        rows_data: list[list[str]],
+        value_input_option: str = "RAW",
+    ) -> None:
         try:
             self.spreadsheet.values_append(
-                range=self.table_name,
+                range=table_name,
                 params={
-                    "valueInputOption": "RAW",
+                    "valueInputOption": value_input_option,
                     "insertDataOption": "INSERT_ROWS",
                 },
                 body={"values": rows_data},
@@ -93,6 +119,17 @@ class AppointmentsSheet:
             AppointmentsSheet._appointment_time(appointment),
             status,
             "",
+            email.uid,
+            email.sent_at.strftime("%d/%m/%Y %H:%M:%S") if email.sent_at else "",
+            email.subject,
+            email.sender,
+            ", ".join(email.recipients),
+            email.url or "",
+        ]
+
+    @staticmethod
+    def email_to_row(email: EmailItem) -> list[str]:
+        return [
             email.uid,
             email.sent_at.strftime("%d/%m/%Y %H:%M:%S") if email.sent_at else "",
             email.subject,

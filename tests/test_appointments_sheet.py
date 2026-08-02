@@ -2,7 +2,7 @@ import unittest
 from datetime import datetime, timezone
 from unittest.mock import patch
 
-from app.appointments_sheet import AppointmentsSheet, SheetsError, headers
+from app.appointments_sheet import AppointmentsSheet, SheetsError, email_headers, headers
 from app.email_client import EmailItem
 from app.models import Appointment
 
@@ -34,6 +34,7 @@ class AppointmentsSheetTests(unittest.TestCase):
         service_account.assert_called_once_with({})
         service_account.return_value.open_by_key.assert_called_once_with("spreadsheet-id")
         self.assertEqual(sheets.table_name, "Turnos")
+        self.assertEqual(sheets.email_table_name, "Correos")
 
     @patch("app.appointments_sheet.gspread.service_account_from_dict")
     def test_appends_rows_to_the_native_table(self, service_account):
@@ -71,7 +72,12 @@ class AppointmentsSheetTests(unittest.TestCase):
             (self.email, second_appointment),
         ])
 
-        rows = sheets.spreadsheet.values_append.call_args.kwargs["body"]["values"]
+        email_call, appointments_call = sheets.spreadsheet.values_append.call_args_list
+        email_rows = email_call.kwargs["body"]["values"]
+        rows = appointments_call.kwargs["body"]["values"]
+        self.assertEqual(email_call.kwargs["range"], "Correos")
+        self.assertEqual(len(email_rows), 1)
+        self.assertEqual(len(email_rows[0]), len(email_headers))
         self.assertEqual(len(rows), 2)
         self.assertEqual(len(rows[0]), len(headers))
         self.assertEqual(rows[0][0], "Ernesto")
@@ -95,6 +101,15 @@ class AppointmentsSheetTests(unittest.TestCase):
             "15:55:00",
             "PENDIENTE",
             "",
+            "42",
+            "24/03/2025 15:55:00",
+            "Turno para Ernesto",
+            "secretaria@gmail.com",
+            "clinica@example.com, planilla@example.com",
+            "https://mail.google.com/mail/u/0/#search/example",
+        ])
+
+        self.assertEqual(AppointmentsSheet.email_to_row(self.email), [
             "42",
             "24/03/2025 15:55:00",
             "Turno para Ernesto",

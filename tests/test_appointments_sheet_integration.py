@@ -32,11 +32,18 @@ class AppointmentsSheetIntegrationTests(unittest.TestCase):
             ).open(spreadsheet_name).id
         cls.sheet_name = os.getenv("SHEETS_TEST_TAB", "Turnos")
         cls.table_name = os.getenv("SHEETS_TEST_TABLE", "Turnos")
+        cls.email_table_name = os.getenv("SHEETS_TEST_EMAIL_TAB", "Correos")
         cls.spreadsheet = gspread.service_account_from_dict(credentials).open_by_key(
             cls.spreadsheet_id
         )
         cls.sheet = cls.spreadsheet.worksheet(cls.sheet_name)
-        cls.sheets = AppointmentsSheet(credentials, cls.spreadsheet_id, cls.table_name)
+        cls.email_sheet = cls.spreadsheet.worksheet(cls.email_table_name)
+        cls.sheets = AppointmentsSheet(
+            credentials,
+            cls.spreadsheet_id,
+            cls.table_name,
+            cls.email_table_name,
+        )
 
     @staticmethod
     def _credentials():
@@ -89,9 +96,18 @@ class AppointmentsSheetIntegrationTests(unittest.TestCase):
             matching_rows = [
                 row for row in self.sheet.get_all_values() if marker in row
             ]
+            matching_email_rows = [
+                row for row in self.email_sheet.get_all_values() if marker in row
+            ]
 
             self.assertEqual(matching_rows, [
-                AppointmentsSheet.email_and_appointment_to_row(email, appointment)
+                AppointmentsSheet.email_and_appointment_to_row(
+                    email,
+                    appointment,
+                )
+            ])
+            self.assertEqual(matching_email_rows, [
+                AppointmentsSheet.email_to_row(email)
             ])
         finally:
             if os.getenv("KEEP_SHEETS_INTEGRATION_ROWS") != "1":
@@ -103,6 +119,14 @@ class AppointmentsSheetIntegrationTests(unittest.TestCase):
                 ]
                 for row_number in reversed(row_numbers):
                     self.sheet.delete_rows(row_number)
+                email_values = self.email_sheet.get_all_values()
+                email_row_numbers = [
+                    index
+                    for index, row in enumerate(email_values, start=1)
+                    if marker in row
+                ]
+                for row_number in reversed(email_row_numbers):
+                    self.email_sheet.delete_rows(row_number)
 
 
 if __name__ == "__main__":

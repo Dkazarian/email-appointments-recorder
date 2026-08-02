@@ -45,6 +45,7 @@ def load_config() -> Config:
             "credentials": Path(os.getenv("GOOGLE_CREDENTIALS")),
             "sheet_id": os.getenv("SHEET_ID"),
             "table_name": os.getenv("SHEET_TABLE", "Turnos"),
+            "email_table_name": os.getenv("SHEET_EMAIL_TABLE", "Correos"),
             "sheet_tab": os.getenv("SHEET_TAB", "Turnos"),
         },
         gemini_ia_api_key=os.getenv("GEMINI_IA_API_KEY"),
