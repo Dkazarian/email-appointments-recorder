@@ -1,6 +1,22 @@
-# Procesador de mails administrativos
+# Email appointments recorder
 
-Application that reads appointment emails, extracts appointment data with an IA provider, stores the result in Google Sheets, and sends a confirmation or failure reply.
+### About this app
+
+#### What does this do?
+
+This python application reads appointments details that a secretary forwards to an internal email when answering the patient. After fetching the email, it is parsed by an IA, and the appointments found are inserted in a google sheet.
+
+#### Why a google sheet and not a database?
+
+This tool is meant to save time without changing an existing workflow, the client needed a quick solution to keep in sync the sheet they use to track the appointments. A dedicated system (with a proper database and more business features) is an option in the future, but it would take both more time to develop and to train personnel.
+
+#### How was this developed?
+
+I used manual coding and Codex, not as SDD this time, but as a pair programmer and typing/refactoring tool. I tried to keep everything as decoupled as possible, as I was going to try different free IAs, and maybe switch the sheet by a database.
+
+#### Learnings
+
+Google Cloud (sheets API), Google studio (requetinng structured inputs to gemini flash), running a local IA with LM Studio. Git Workflows & Repository secrets.
 
 ## Workflow
 
@@ -56,7 +72,6 @@ SMTP_HOST=smtp.example.com
 SMTP_PORT=465
 SMTP_USER=mail@example.com
 SMTP_PASSWORD=...
-MAIL_WEB_BASE_URL=https://mail.google.com/mail/u/0
 
 MAIL_PROCESSED_FOLDER=INBOX.Procesados
 MAIL_FAILED_FOLDER=INBOX.Fallidos
@@ -68,8 +83,6 @@ SHEET_EMAIL_TABLE=Correos
 
 INTERVAL_MINUTES=15
 ```
-
-Never commit `.env`, `.env.test`, API keys, passwords, or service-account credentials.
 
 ### IA providers
 
