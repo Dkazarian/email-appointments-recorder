@@ -29,7 +29,7 @@ def _inline_json_schema(schema: dict) -> dict:
     return resolve(schema)
 
 
-class GeminiIAClient:
+class GoogleAIStudioClient:
     def __init__(self, api_key: str, model_name: str = "gemini-3.5-flash"):
         self.client = genai.Client(
             api_key=api_key,
@@ -53,5 +53,5 @@ class GeminiIAClient:
         if isinstance(parsed, dict):
             return response_schema.model_validate(parsed)
         raise RuntimeError(
-            f"Gemini returned an unsupported parsed response type: {type(parsed).__name__}"
+            f"Google AI Studio returned an unsupported parsed response type: {type(parsed).__name__}"
         )

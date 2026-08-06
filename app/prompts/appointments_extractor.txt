@@ -1,0 +1,15 @@
+Analiza el correo y devuelve exclusivamente el JSON definido por el esquema.
+
+Extrae todos los turnos médicos de este correo. Este prompt procesa un solo correo por vez; si contiene varios turnos, devuelve todos en 'appointments', sin asumir ningún orden.
+
+Reglas de extracción:
+- 'patient_name': si aparece 'Paciente: X', copia exactamente X. Si no aparece en el cuerpo, puedes usar el asunto como posible nombre solo si claramente parece contener uno; no lo des por seguro si el asunto es ambiguo.
+- 'clinic_or_professional': usa la clínica, centro médico o profesional más relevante.
+- 'study': usa el tipo breve del estudio.
+- 'study_detail': conserva la descripción completa; si no hay detalle adicional, repite 'study'.
+- 'date': es la fecha del turno, no la fecha del correo. Reconoce fechas escritas naturalmente por personas, incluyendo nombres de meses en español, fechas con o sin ceros iniciales y expresiones como 'el 3 de agosto', '3 de agosto de 2026' o 'para el 31-12-2026'. Para fechas completas, normaliza el resultado a DD/MM/YYYY. Si solo aparecen día y mes, usa DD/MM/[year] si el año puede inferirse con seguridad; de lo contrario, conserva DD/MM. No uses la fecha de recepción del correo.
+- 'time': extrae la hora del turno en formato de 24 horas HH:MM cuando esté disponible.
+
+Usa null únicamente cuando un dato no figure en el correo. No inventes valores.
+
+Si el correo no contiene ningún turno médico o no se puede identificar una fecha para ninguno de sus turnos, devuelve 'appointments': [] y explica brevemente el motivo en 'error_message'. Si se extrajo al menos un turno, devuelve 'error_message': null.

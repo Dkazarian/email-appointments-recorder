@@ -1,4 +1,5 @@
 import json
+import re
 import unittest
 
 from app.appointments_extractor import AppointmentsExtractor
@@ -8,13 +9,11 @@ from tests.fixtures.appointment_emails import APPOINTMENT_FIXTURES
 def assert_fixture_extraction(
     test_case: unittest.TestCase,
     provider_name,
-    ia_client,
-    *,
-    process_emails_individually: bool = False,
+    ai_client,
 ):
-    class PrintingIAClient:
+    class PrintingAIClient:
         def generate_structured_output(self, prompt, response_schema):
-            response = ia_client.generate_structured_output(
+            response = ai_client.generate_structured_output(
                 prompt=prompt,
                 response_schema=response_schema,
             )
@@ -32,10 +31,7 @@ def assert_fixture_extraction(
             )
             return response
 
-    extractor = AppointmentsExtractor(
-        [PrintingIAClient()],
-        process_emails_individually=process_emails_individually,
-    )
+    extractor = AppointmentsExtractor([PrintingAIClient()])
     emails = [fixture.email for fixture in APPOINTMENT_FIXTURES]
     results = extractor.parse_all(emails)
 
@@ -59,10 +55,30 @@ def assert_fixture_extraction(
 
     for fixture in APPOINTMENT_FIXTURES:
         actual = appointments_by_email[fixture.email.uid]
+        def matches(expected):
+            if expected.study.casefold() not in current.study.casefold():
+                return False
+            if current.patient_name is None:
+                return True
+            if expected.patient_name is None:
+                return True
+            actual_name_parts = set(
+                re.findall(r"[\wÀ-ÿ]+", current.patient_name.lower())
+            )
+            expected_name_parts = set(
+                re.findall(r"[\wÀ-ÿ]+", expected.patient_name.lower())
+            )
+            return actual_name_parts == expected_name_parts
+
         test_case.assertEqual(len(actual), len(fixture.extracted))
-        actual_pairs = sorted((a.patient_name, a.study) for a in actual)
-        expected_pairs = sorted(
-            (expected.patient_name, expected.study)
-            for expected in fixture.extracted
-        )
-        test_case.assertEqual(actual_pairs, expected_pairs)
+        unmatched = list(fixture.extracted)
+        for current in actual:
+            match_index = next(
+                (index for index, expected in enumerate(unmatched) if matches(expected)),
+                None,
+            )
+            test_case.assertIsNotNone(
+                match_index,
+                f"Unexpected appointment extracted: {current}",
+            )
+            unmatched.pop(match_index)

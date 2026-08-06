@@ -54,7 +54,7 @@ class EmailIntegrationTests(unittest.TestCase):
         appointment = Appointment(patient_name="Ana", study="Laboratorio")
 
         with self._client() as client:
-            client.reply_success(email, appointment)
+            client.reply_success(email, [appointment])
 
         reply = self._wait_for_email(reply_subject, self.config.imap["folder"])
         self.assertIsNotNone(reply)

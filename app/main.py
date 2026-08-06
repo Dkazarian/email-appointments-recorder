@@ -9,9 +9,9 @@ from .appointments_extractor import AppointmentsExtractor
 from .appointments_sheet import AppointmentsSheet
 from .config import load_config, load_google_credentials
 from .email_client import AppointmentsEmailClient
-from .ia_clients import GeminiIAClient, LocalIAClient
+from .ai_clients import GoogleAIStudioClient, LocalAIClient
 from .logger import Logger
-from .ia_clients import OpenRouterIAClient
+from .ai_clients import OpenRouterAIClient
 
 
 def process_batch(email_client, extractor, sheets, logger) -> None:
@@ -43,14 +43,14 @@ def run(
     *,
     email_client_factory: Callable = AppointmentsEmailClient,
     extractor_factory: Callable = AppointmentsExtractor,
-    gemini_ia_client_factory: Callable = GeminiIAClient,
-    openrouter_ia_client_factory: Callable = OpenRouterIAClient,
-    local_ia_client_factory: Callable = LocalIAClient,
+    google_ai_studio_client_factory: Callable = GoogleAIStudioClient,
+    openrouter_ai_client_factory: Callable = OpenRouterAIClient,
+    local_ai_client_factory: Callable = LocalAIClient,
     sheets_factory: Callable = AppointmentsSheet,
     logger_factory: Callable = Logger,
     sleep: Callable = time.sleep,
     max_cycles: int | None = None,
-    ia_provider: str | None = None,
+    ai_provider: str | None = None,
 ) -> None:
     """Build integrations and poll until interrupted.
 
@@ -59,28 +59,28 @@ def run(
     """
     config = config or load_config()
     credentials = load_google_credentials(config.database["credentials"])
-    selected_provider = ia_provider.strip().lower() if ia_provider else None
-    if selected_provider not in {None, "local", "gemini", "openrouter"}:
-        raise ValueError("ia_provider must be local, gemini, or openrouter")
+    selected_provider = ai_provider.strip().lower() if ai_provider else None
+    if selected_provider not in {None, "local", "google_ai_studio", "openrouter"}:
+        raise ValueError("ai_provider must be local, google_ai_studio, or openrouter")
 
     use_local = selected_provider == "local" or (
-        selected_provider is None and config.local_ia_enabled
+        selected_provider is None and config.local_ai_enabled
     )
     if use_local:
-        ia_clients = [
-            local_ia_client_factory(
-                config.local_ia_base_url,
-                config.local_ia_model,
-                config.local_ia_timeout_seconds,
+        ai_clients = [
+            local_ai_client_factory(
+                config.local_ai_base_url,
+                config.local_ai_model,
+                config.local_ai_timeout_seconds,
             )
         ]
     else:
-        ia_clients = []
-        if config.gemini_ia_api_key and selected_provider in {None, "gemini"}:
-            ia_clients.append(
-                gemini_ia_client_factory(
-                    config.gemini_ia_api_key,
-                    config.gemini_ia_model,
+        ai_clients = []
+        if config.google_ai_studio_api_key and selected_provider in {None, "google_ai_studio"}:
+            ai_clients.append(
+                google_ai_studio_client_factory(
+                    config.google_ai_studio_api_key,
+                    config.google_ai_studio_model,
                 )
             )
         if (
@@ -88,25 +88,15 @@ def run(
             and config.open_router_model
             and selected_provider in {None, "openrouter"}
         ):
-            ia_clients.append(
-                openrouter_ia_client_factory(
+            ai_clients.append(
+                openrouter_ai_client_factory(
                     config.openrouter_api_key,
                     config.open_router_model,
                 )
             )
-    if not ia_clients:
-        raise ValueError("At least one IA client must be configured")
-    process_emails_individually = selected_provider in {"local", "openrouter"} or (
-        selected_provider is None
-        and (config.local_ia_enabled or (
-            not config.gemini_ia_api_key
-            and bool(config.openrouter_api_key and config.open_router_model)
-        ))
-    )
-    extractor = extractor_factory(
-        ia_clients,
-        process_emails_individually=process_emails_individually,
-    )
+    if not ai_clients:
+        raise ValueError("At least one AI client must be configured")
+    extractor = extractor_factory(ai_clients)
     sheets = sheets_factory(
         credentials,
         config.database["sheet_id"],
@@ -132,7 +122,7 @@ def run(
             except ServerError as error:
                 if error.code == 503:
                     logger.log_error(
-                        f"An IA provider is temporarily unavailable; emails will be retried next cycle: {error}"
+                        f"An AI provider is temporarily unavailable; emails will be retried next cycle: {error}"
                     )
                 else:
                     logger.log_error(str(error))

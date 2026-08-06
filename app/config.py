@@ -10,14 +10,14 @@ class Config:
     processed_folder: str
     failed_folder: str
     allowed_senders: set[str]
-    gemini_ia_api_key: str
-    gemini_ia_model: str
+    google_ai_studio_api_key: str
+    google_ai_studio_model: str
     openrouter_api_key: str | None
     open_router_model: str | None
-    local_ia_enabled: bool
-    local_ia_base_url: str
-    local_ia_model: str
-    local_ia_timeout_seconds: int
+    local_ai_enabled: bool
+    local_ai_base_url: str
+    local_ai_model: str
+    local_ai_timeout_seconds: int
     interval_minutes: int
     mail_web_base_url: str
     database: object
@@ -54,14 +54,14 @@ def load_config() -> Config:
             "email_table_name": os.getenv("SHEET_EMAIL_TABLE", "Correos"),
             "sheet_tab": os.getenv("SHEET_TAB", "Turnos"),
         },
-        gemini_ia_api_key=os.getenv("GEMINI_IA_API_KEY"),
-        gemini_ia_model=os.getenv("GEMINI_IA_MODEL", "gemini-2.0-flash"),
+        google_ai_studio_api_key=os.getenv("GOOGLE_AI_STUDIO_API_KEY"),
+        google_ai_studio_model=os.getenv("GOOGLE_AI_STUDIO_MODEL", "gemini-2.0-flash"),
         openrouter_api_key=os.getenv("OPENROUTER_API_KEY"),
         open_router_model=os.getenv("OPEN_ROUTER_MODEL"),
-        local_ia_enabled=os.getenv("LOCAL_IA_ENABLED", "false").lower() == "true",
-        local_ia_base_url=os.getenv("LOCAL_IA_BASE_URL", "http://localhost:1234/v1"),
-        local_ia_model=os.getenv("LOCAL_IA_MODEL", "google_gemma-3-4b-it"),
-        local_ia_timeout_seconds=int(os.getenv("LOCAL_IA_TIMEOUT_SECONDS", "300")),
+        local_ai_enabled=os.getenv("LOCAL_AI_ENABLED", "false").lower() == "true",
+        local_ai_base_url=os.getenv("LOCAL_AI_BASE_URL", "http://localhost:1234/v1"),
+        local_ai_model=os.getenv("LOCAL_AI_MODEL", "google_gemma-3-4b-it"),
+        local_ai_timeout_seconds=int(os.getenv("LOCAL_AI_TIMEOUT_SECONDS", "300")),
         interval_minutes=int(os.getenv("INTERVAL_MINUTES")),
         mail_web_base_url=os.getenv(
             "MAIL_WEB_BASE_URL", "https://mail.google.com/mail/u/0"

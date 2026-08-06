@@ -2,12 +2,12 @@ import unittest
 from unittest.mock import Mock
 
 from app.appointments_extractor import (
-    AppointmentExtracted,
     AppointmentsExtractor,
     ExtractionResult,
-    IAExtractionResponse,
+    AIExtractionResponse,
 )
 from app.email_client import EmailItem
+from app.models import Appointment
 
 
 class AppointmentsExtractorTests(unittest.TestCase):
@@ -23,135 +23,110 @@ class AppointmentsExtractorTests(unittest.TestCase):
             body="Radiografia el 24/3 a las 15:55 para Ernesto",
         )
 
-    def test_parse_all_maps_gemini_results_back_to_emails(self):
-        ia_client = Mock()
-        ia_client.generate_structured_output.return_value = IAExtractionResponse(
-            extracted_appointments=[
-                AppointmentExtracted(
-                    email_id="42",
-                    patient_name="Ernesto",
-                    study="Radiografia",
-                    study_detail="Radiografia mano izquierda",
-                    date="24/3",
-                    time="15:55",
-                )
-            ]
+    def test_parse_returns_provider_appointments_for_email(self):
+        ai_client = Mock()
+        appointment = Appointment(
+            patient_name="Ernesto",
+            study="Radiografia",
+            study_detail="Radiografia mano izquierda",
+            date="24/03/2026",
+            time="15:55",
         )
-        extractor = AppointmentsExtractor(ia_client)
-
-        results = extractor.parse_all([self.mail])
-
-        self.assertEqual(len(results[0].appointments), 1)
-        self.assertIsInstance(results[0], ExtractionResult)
-        self.assertIs(results[0].mail, self.mail)
-        self.assertEqual(results[0].appointments[0].patient_name, "Ernesto")
-        self.assertIsNone(results[0].error)
-        ia_client.generate_structured_output.assert_called_once()
-
-    def test_prompt_includes_subject_for_missing_patient_names(self):
-        extractor = AppointmentsExtractor(Mock())
-
-        prompt = extractor._build_batch_prompt([self.mail])
-
-        self.assertIn("Asunto: Turno", prompt)
-        self.assertIn("puedes usar el asunto como posible patient_name", prompt)
-        self.assertIn("si el asunto es ambiguo", prompt)
-        self.assertIn("fechas escritas naturalmente por personas", prompt)
-        self.assertIn("31 de diciembre de 2026", prompt)
-
-    def test_parse_all_maps_failures_back_to_emails(self):
-        ia_client = Mock()
-        ia_client.generate_structured_output.return_value = IAExtractionResponse(
-            failed_emails=[{"email_id": "42", "error_message": "Sin turno"}]
+        ai_client.generate_structured_output.return_value = AIExtractionResponse(
+            appointments=[appointment]
         )
-        extractor = AppointmentsExtractor(ia_client)
 
-        result = extractor.parse_all([self.mail])[0]
+        result = AppointmentsExtractor(ai_client).parse(self.mail)
 
-        self.assertEqual(result.appointments, [])
-        self.assertEqual(result.error, "Sin turno")
+        self.assertIsInstance(result, ExtractionResult)
         self.assertIs(result.mail, self.mail)
-
-    def test_parse_all_rejects_appointments_without_date(self):
-        ia_client = Mock()
-        ia_client.generate_structured_output.return_value = IAExtractionResponse(
-            extracted_appointments=[
-                AppointmentExtracted(
-                    email_id="42",
-                    patient_name="Ernesto",
-                    study="Radiografia",
-                    time="15:55",
-                )
-            ]
-        )
-        extractor = AppointmentsExtractor(ia_client)
-
-        result = extractor.parse_all([self.mail])[0]
-
-        self.assertEqual(result.appointments, [])
-        self.assertEqual(
-            result.error,
-            "El turno no contiene una fecha identificable",
-        )
-        self.assertIs(result.mail, self.mail)
-
-    def test_parse_all_maps_unknown_id_to_sole_email(self):
-        ia_client = Mock()
-        ia_client.generate_structured_output.return_value = IAExtractionResponse(
-            extracted_appointments=[
-                AppointmentExtracted(
-                    email_id="model-generated-id",
-                    patient_name="Ernesto",
-                    study="Radiografia",
-                    date="24/03/2026",
-                )
-            ]
-        )
-        extractor = AppointmentsExtractor(ia_client)
-
-        result = extractor.parse_all([self.mail])[0]
-
-        self.assertEqual(len(result.appointments), 1)
-        self.assertIs(result.mail, self.mail)
+        self.assertEqual(result.appointments, [appointment])
         self.assertIsNone(result.error)
+        ai_client.generate_structured_output.assert_called_once()
 
-    def test_parse_all_processes_each_email_individually_for_marked_ia(self):
-        ia_client = Mock()
-        ia_client.generate_structured_output.return_value = IAExtractionResponse(
-            extracted_appointments=[
-                AppointmentExtracted(
-                    email_id="42",
-                    patient_name="Ernesto",
-                    study="Radiografia",
-                    date="24/03/2026",
-                )
-            ]
+    def test_parse_all_processes_each_email_individually(self):
+        ai_client = Mock()
+        ai_client.generate_structured_output.return_value = AIExtractionResponse(
+            appointments=[Appointment(study="Radiografia", date="24/03/2026")]
         )
-        extractor = AppointmentsExtractor(ia_client, process_emails_individually=True)
+        extractor = AppointmentsExtractor(ai_client)
 
         results = extractor.parse_all([self.mail, self.mail])
 
         self.assertEqual(len(results), 2)
-        self.assertTrue(all(result.error is None for result in results))
-        self.assertEqual(ia_client.generate_structured_output.call_count, 2)
+        self.assertEqual(ai_client.generate_structured_output.call_count, 2)
 
-    def test_parse_all_uses_next_ia_client_when_first_one_fails(self):
+    def test_parse_normalizes_literal_null_values(self):
+        ai_client = Mock()
+        ai_client.generate_structured_output.return_value = AIExtractionResponse(
+            appointments=[
+                Appointment(
+                    patient_name="null",
+                    clinic_or_professional=" NONE ",
+                    study="TAC",
+                    study_detail="null",
+                    date="05/05/2026",
+                    time="null",
+                )
+            ]
+        )
+
+        result = AppointmentsExtractor(ai_client).parse(self.mail)
+
+        appointment = result.appointments[0]
+        self.assertIsNone(appointment.patient_name)
+        self.assertIsNone(appointment.clinic_or_professional)
+        self.assertEqual(appointment.study, "TAC")
+        self.assertIsNone(appointment.study_detail)
+        self.assertEqual(appointment.date, "05/05/2026")
+        self.assertIsNone(appointment.time)
+
+    def test_parse_returns_provider_error(self):
+        ai_client = Mock()
+        ai_client.generate_structured_output.return_value = AIExtractionResponse(
+            error_message="Sin fecha"
+        )
+
+        result = AppointmentsExtractor(ai_client).parse(self.mail)
+
+        self.assertEqual(result.appointments, [])
+        self.assertEqual(result.error, "Sin fecha")
+
+    def test_parse_adds_error_when_provider_returns_neither_result_nor_error(self):
+        ai_client = Mock()
+        ai_client.generate_structured_output.return_value = AIExtractionResponse()
+
+        result = AppointmentsExtractor(ai_client).parse(self.mail)
+
+        self.assertEqual(result.appointments, [])
+        self.assertEqual(result.error, "La AI no pudo extraer un turno de este correo")
+
+    def test_parse_uses_next_ai_client_when_first_one_fails(self):
         unavailable_client = Mock()
         unavailable_client.generate_structured_output.side_effect = RuntimeError(
             "temporary provider failure"
         )
         fallback_client = Mock()
-        fallback_client.generate_structured_output.return_value = IAExtractionResponse(
-            failed_emails=[{"email_id": "42", "error_message": "Sin turno"}]
+        fallback_client.generate_structured_output.return_value = AIExtractionResponse(
+            error_message="Sin turno"
         )
-        extractor = AppointmentsExtractor([unavailable_client, fallback_client])
 
-        result = extractor.parse_all([self.mail])[0]
+        result = AppointmentsExtractor(
+            [unavailable_client, fallback_client]
+        ).parse(self.mail)
 
-        self.assertEqual(result.appointments, [])
         self.assertEqual(result.error, "Sin turno")
         unavailable_client.generate_structured_output.assert_called_once()
         fallback_client.generate_structured_output.assert_called_once()
+
+    def test_prompt_includes_natural_date_instructions_and_email(self):
+        prompt = AppointmentsExtractor(Mock())._build_prompt(self.mail)
+
+        self.assertIn("Asunto: Turno", prompt)
+        self.assertIn("Extrae todos los turnos médicos", prompt)
+        self.assertIn("fechas escritas naturalmente por personas", prompt)
+        self.assertIn("3 de agosto de 2026", prompt)
+        self.assertIn("Contenido:", prompt)
 
 
 if __name__ == "__main__":

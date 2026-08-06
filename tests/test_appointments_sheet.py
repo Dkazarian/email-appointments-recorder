@@ -1,6 +1,6 @@
 import unittest
 from datetime import datetime, timezone
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 from app.appointments_sheet import AppointmentsSheet, SheetsError, email_headers, headers
 from app.email_client import EmailItem
@@ -52,6 +52,41 @@ class AppointmentsSheetTests(unittest.TestCase):
             },
             body={"values": rows},
         )
+
+    @patch("app.appointments_sheet.gspread.service_account_from_dict")
+    def test_get_rows_reads_the_configured_table_by_default(self, service_account):
+        sheets = AppointmentsSheet({}, "spreadsheet-id", "Turnos")
+        expected_rows = [["Paciente"], ["Ernesto"]]
+        sheets.spreadsheet.worksheet.return_value.get_all_values.return_value = (
+            expected_rows
+        )
+
+        self.assertEqual(sheets.get_rows(), expected_rows)
+        sheets.spreadsheet.worksheet.assert_called_once_with("Turnos")
+
+    @patch("app.appointments_sheet.gspread.service_account_from_dict")
+    def test_get_rows_reads_an_explicit_table(self, service_account):
+        sheets = AppointmentsSheet({}, "spreadsheet-id", "Turnos")
+        expected_rows = [["UID"], ["42"]]
+        sheets.spreadsheet.worksheet.return_value.get_all_values.return_value = (
+            expected_rows
+        )
+
+        self.assertEqual(sheets.get_rows("Correos"), expected_rows)
+        sheets.spreadsheet.worksheet.assert_called_once_with("Correos")
+
+    @patch("app.appointments_sheet.gspread.service_account_from_dict")
+    def test_delete_rows_deletes_rows_from_bottom_to_top(self, service_account):
+        sheets = AppointmentsSheet({}, "spreadsheet-id", "Turnos")
+        worksheet = sheets.spreadsheet.worksheet.return_value
+
+        sheets.delete_rows([2, 5, 3])
+
+        self.assertEqual(
+            worksheet.delete_rows.call_args_list,
+            [call(5), call(3), call(2)],
+        )
+        sheets.spreadsheet.worksheet.assert_called_once_with("Turnos")
 
     @patch("app.appointments_sheet.gspread.service_account_from_dict")
     def test_wraps_gspread_errors(self, service_account):

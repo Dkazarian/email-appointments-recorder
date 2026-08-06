@@ -89,6 +89,20 @@ class AppointmentsSheet:
     def append_rows_to_table(self, rows_data: list[list[str]]) -> None:
         self._append_rows(self.table_name, rows_data)
 
+    def get_rows(self, table_name: str | None = None) -> list[list[str]]:
+        """Return all rows from one of the configured worksheet tables."""
+        return self.spreadsheet.worksheet(
+            table_name or self.table_name
+        ).get_all_values()
+
+    def delete_rows(
+        self, row_numbers: list[int], table_name: str | None = None
+    ) -> None:
+        """Delete the given 1-based worksheet rows, bottom-up."""
+        worksheet = self.spreadsheet.worksheet(table_name or self.table_name)
+        for row_number in sorted(row_numbers, reverse=True):
+            worksheet.delete_rows(row_number)
+
     def _append_rows(
         self,
         table_name: str,

@@ -53,7 +53,7 @@ class MainIntegrationTests(unittest.TestCase):
         email_client.mark_failed.assert_called_once_with(failed_mail)
         logger.log_error.assert_any_call("2: No contiene fecha")
 
-    def test_transient_gemini_error_leaves_emails_for_next_cycle(self):
+    def test_transient_ai_error_leaves_emails_for_next_cycle(self):
         emails = [
             EmailItem(
                 uid="1",

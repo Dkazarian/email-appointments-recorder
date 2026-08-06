@@ -1,14 +1,20 @@
 """Anonymized appointment emails shared by extractor and E2E tests."""
 
 from dataclasses import dataclass
+from datetime import datetime
 
 from app.email_client import EmailItem
+
+
+CURRENT_YEAR = datetime.now().year
 
 
 @dataclass(frozen=True)
 class ExpectedAppointment:
     patient_name: str | None
     study: str
+    date: str | None = None
+    time: str | None = None
 
 
 @dataclass(frozen=True)
@@ -25,15 +31,15 @@ APPOINTMENT_FIXTURES = [
             subject="Turno de Ana", sent_at=None,
             body=(
                 "Paciente: Ana Perez\n"
-                "Turno 1 - Estudio: Laboratorio; ClÃ­nica: Clinica Central; "
+                "Turno 1 - Estudio: Laboratorio; Clínica: Clinica Central; "
                 "Fecha: 24/03; Hora: 15:30\n"
                 "Turno 2 - Estudio: Radiografia; Detalle: Radiografia mano izquierda; "
-                "ClÃ­nica: Centro Norte; Fecha: 25/03; Hora: 09:00"
+                "Clínica: Centro Norte; Fecha: 25/03; Hora: 09:00"
             ),
         ),
         extracted=(
-            ExpectedAppointment("Ana Perez", "Laboratorio"),
-            ExpectedAppointment("Ana Perez", "Radiografia"),
+            ExpectedAppointment("Ana Perez", "Laboratorio", f"24/03/{CURRENT_YEAR}", "15:30"),
+            ExpectedAppointment("Ana Perez", "Radiografia", f"25/03/{CURRENT_YEAR}", "09:00"),
         ),
     ),
     AppointmentFixture(
@@ -45,20 +51,20 @@ APPOINTMENT_FIXTURES = [
                 "Paciente: Juan Gomez\n"
                 "Turno 1 - Estudio: Radiografia; Detalle: Radiografia mano izquierda; "
                 "Fecha: 14/05; Hora: 19:30\n"
-                "Turno 2 - Estudio: Audiometria; ClÃ­nica: Calle 123; "
+                "Turno 2 - Estudio: Audiometria; Clí­nica: Calle 123; "
                 "Fecha: 15/05; Hora: 10:30"
             ),
         ),
         extracted=(
-            ExpectedAppointment("Juan Gomez", "Radiografia"),
-            ExpectedAppointment("Juan Gomez", "Audiometria"),
+            ExpectedAppointment("Juan Gomez", "Radiografia", f"14/05/{CURRENT_YEAR}", "19:30"),
+            ExpectedAppointment("Juan Gomez", "Audiometria", f"15/05/{CURRENT_YEAR}", "10:30"),
         ),
     ),
     AppointmentFixture(
         email=EmailItem(
             uid="email-3", url=None, sender="secretaria@example.com",
             reply_to="secretaria@example.com", recipients=[],
-            subject="Solicitud de Turno – Paciente SORIA, Leandro Matías", sent_at=None,
+            subject="Solicitud de Turno - Paciente SORIA, Leandro Matías", sent_at=None,
             body=(
                 "Buenas tardes,\n\n"
                 "RMN: Turno para el 25/8- 8hs en Aráoz 1180 entre Güemes y Charcas, CABA\n\n"
@@ -66,7 +72,7 @@ APPOINTMENT_FIXTURES = [
                 "Saludos\n Valeria"
             ),
         ),
-        extracted=(ExpectedAppointment("Leandro Matías Soria", "RMN"),),
+        extracted=(ExpectedAppointment("Leandro Matías Soria", "RMN", f"25/08/{CURRENT_YEAR}", "08:00"),),
     ),
     AppointmentFixture(
         email=EmailItem(
@@ -81,8 +87,8 @@ APPOINTMENT_FIXTURES = [
             ),
         ),
         extracted=(
-            ExpectedAppointment("Julieta Belén Ferraro", "RX"),
-            ExpectedAppointment("Julieta Belén Ferraro", "EMG"),
+            ExpectedAppointment("Julieta Belén Ferraro", "RX", f"18/08/{CURRENT_YEAR}", "09:00"),
+            ExpectedAppointment("Julieta Belén Ferraro", "EMG", f"18/08/{CURRENT_YEAR}", "15:10"),
         ),
     ),
     AppointmentFixture(
@@ -100,9 +106,9 @@ APPOINTMENT_FIXTURES = [
             ),
         ),
         extracted=(
-            ExpectedAppointment(None, "TAC"),
-            ExpectedAppointment(None, "RMN"),
-            ExpectedAppointment(None, "PSICO"),
+            ExpectedAppointment(None, "TAC", f"05/05/{CURRENT_YEAR}", "09:30"),
+            ExpectedAppointment(None, "RMN", f"05/05/{CURRENT_YEAR}", "10:00"),
+            ExpectedAppointment(None, "PSICO", f"05/05/{CURRENT_YEAR}", "09:45"),
         ),
     ),
     AppointmentFixture(
@@ -116,7 +122,7 @@ APPOINTMENT_FIXTURES = [
                 "Luego enviaremos los datos para declarar.\n\nSaludos\n\nValeria"
             ),
         ),
-        extracted=(ExpectedAppointment("Tomás Alejandro Martínez", "RMN"),),
+        extracted=(ExpectedAppointment("Tomás Alejandro Martínez", "RMN", f"20/08/{CURRENT_YEAR}", "12:00"),),
     ),
     AppointmentFixture(
         email=EmailItem(
@@ -136,7 +142,7 @@ APPOINTMENT_FIXTURES = [
                 "Lu"
             ),
         ),
-        extracted=(ExpectedAppointment("BUGS BUNNY", "PSICO"),),
+        extracted=(ExpectedAppointment("BUGS BUNNY", "PSICO", f"03/08/{CURRENT_YEAR}", "13:20"),),
     ),
 ]
 

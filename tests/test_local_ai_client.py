@@ -4,15 +4,15 @@ from unittest.mock import Mock, patch
 
 from pydantic import BaseModel
 
-from app.ia_clients.lm_studio import LocalIAClient
+from app.ai_clients.lm_studio import LocalAIClient
 
 
 class HelloWorld(BaseModel):
     message: str
 
 
-class LocalIAClientTests(unittest.TestCase):
-    @patch("app.ia_clients.lm_studio.request.urlopen")
+class LocalAIClientTests(unittest.TestCase):
+    @patch("app.ai_clients.lm_studio.request.urlopen")
     def test_generates_structured_output_through_lm_studio(self, urlopen):
         response = Mock()
         response.read.return_value = json.dumps(
@@ -24,7 +24,7 @@ class LocalIAClientTests(unittest.TestCase):
         ).encode("utf-8")
         urlopen.return_value.__enter__.return_value = response
 
-        result = LocalIAClient(
+        result = LocalAIClient(
             "http://localhost:1234/v1/",
             "google_gemma-3-4b-it",
             timeout_seconds=45,

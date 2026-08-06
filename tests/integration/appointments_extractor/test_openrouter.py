@@ -2,7 +2,7 @@ import os
 import unittest
 
 from app.config import load_dotenv_file
-from app.ia_clients import OpenRouterIAClient
+from app.ai_clients import OpenRouterAIClient
 
 from .common import assert_fixture_extraction
 
@@ -22,6 +22,5 @@ class OpenRouterAppointmentsExtractorIntegrationTests(unittest.TestCase):
         assert_fixture_extraction(
             self,
             "OpenRouter",
-            OpenRouterIAClient(api_key, model_name),
-            process_emails_individually=True,
+            OpenRouterAIClient(api_key, model_name),
         )

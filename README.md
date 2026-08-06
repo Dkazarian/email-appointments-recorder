@@ -4,7 +4,7 @@
 
 #### What does this do?
 
-This python application reads appointments details that a secretary forwards to an internal email when answering the patient. After fetching the email, it is parsed by an IA, and the appointments found are inserted in a google sheet.
+This Python application reads appointment details that a secretary forwards to an internal email when answering the patient. After fetching the email, it is parsed by an AI, and the appointments found are inserted in a Google Sheet.
 
 #### Why a google sheet and not a database?
 
@@ -12,11 +12,11 @@ This tool is meant to save time without changing an existing workflow, the clien
 
 #### How was this developed?
 
-I used manual coding and Codex, not as SDD this time, but as a pair programmer and typing/refactoring tool. I tried to keep everything as decoupled as possible, as I was going to try different free IAs, and maybe switch the sheet by a database.
+I used manual coding and Codex, mostly as a pair programming and typing/refactoring tool. I tried to keep everything as decoupled as possible, as I was going to try different free AI providers, and maybe switch the sheet by a database.
 
 #### Learnings
 
-Google Cloud (sheets API), Google studio (requetinng structured inputs to gemini flash), running a local IA with LM Studio. Git Workflows & Repository secrets.
+Google Cloud (Sheets API), Google AI Studio (requesting structured inputs from Gemini Flash), and a local AI with LM Studio. Git Workflows & Repository secrets.
 
 ## Workflow
 
@@ -34,9 +34,9 @@ An appointment must have an identifiable appointment date. Emails without one ar
 - Python 3.11+ recommended
 - An IMAP/SMTP mailbox
 - A Google service account with access to the target spreadsheet
-- One IA provider:
+- One AI provider:
   - Local LM Studio model
-  - Gemini API
+  - Google AI Studio (Gemini API)
   - OpenRouter API
 
 ## Installation
@@ -84,28 +84,28 @@ SHEET_EMAIL_TABLE=Correos
 INTERVAL_MINUTES=15
 ```
 
-### IA providers
+### AI providers
 
-Local LM Studio is used when `LOCAL_IA_ENABLED=true`:
+Local LM Studio is used when `LOCAL_AI_ENABLED=true`:
 
 ```env
-LOCAL_IA_ENABLED=true
-LOCAL_IA_BASE_URL=http://localhost:1234/v1
-LOCAL_IA_MODEL=google_gemma-3-4b-it
-LOCAL_IA_TIMEOUT_SECONDS=300
+LOCAL_AI_ENABLED=true
+LOCAL_AI_BASE_URL=http://localhost:1234/v1
+LOCAL_AI_MODEL=google_gemma-3-4b-it
+LOCAL_AI_TIMEOUT_SECONDS=300
 ```
 
-When local IA is disabled, the application can use Gemini and OpenRouter from the configured credentials:
+When local AI is disabled, the application can use Google AI Studio and OpenRouter from the configured credentials:
 
 ```env
-LOCAL_IA_ENABLED=false
-GEMINI_IA_API_KEY=...
-GEMINI_IA_MODEL=gemini-2.0-flash
+LOCAL_AI_ENABLED=false
+GOOGLE_AI_STUDIO_API_KEY=...
+GOOGLE_AI_STUDIO_MODEL=gemini-2.0-flash
 OPENROUTER_API_KEY=...
 OPEN_ROUTER_MODEL=...
 ```
 
-Local IA and OpenRouter can be configured to process emails individually through the extractor. Gemini uses batch processing by default.
+Local AI and OpenRouter can be configured to process emails individually through the extractor. Google AI Studio uses batch processing by default.
 
 ## Running the application
 
@@ -126,7 +126,7 @@ Run the local unit test suite:
 Optional integration tests are disabled unless explicitly enabled. Examples:
 
 ```powershell
-$env:RUN_LOCAL_IA_INTEGRATION_TESTS="1"
+$env:RUN_LOCAL_AI_INTEGRATION_TESTS="1"
 \.venv\Scripts\python.exe -m unittest tests.integration.appointments_extractor.test_local -v
 ```
 
@@ -135,23 +135,23 @@ $env:RUN_LOCAL_IA_INTEGRATION_TESTS="1"
 Create `.env.test` from `.env.test.example`, configure a dedicated test spreadsheet, and set the provider:
 
 ```env
-E2E_IA_PROVIDER=local
+E2E_AI_PROVIDER=local
 ```
 
-Supported providers are `local`, `gemini`, and `openrouter`.
+Supported providers are `local`, `google_ai_studio`, and `openrouter`.
 
 Run the real E2E test while preserving generated messages and rows:
 
 ```powershell
 $env:RUN_END_TO_END_INTEGRATION_TESTS="1"
 $env:KEEP_END_TO_END_DATA="1"
-$env:E2E_IA_PROVIDER="local"
+$env:E2E_AI_PROVIDER="local"
 \.venv\Scripts\python.exe -m unittest tests.test_end_to_end_integration -v
 ```
 
 Use `KEEP_END_TO_END_DATA=1` while diagnosing failures. Without it, the test cleanup removes its generated emails and matching spreadsheet rows.
 
-The E2E test prints the structured IA response and verifies:
+The E2E test prints the structured AI response and verifies:
 
 - appointment extraction
 - mandatory appointment date
@@ -159,6 +159,56 @@ The E2E test prints the structured IA response and verifies:
 - email URL generation
 - success reply
 - movement to the processed folder
+
+### Test classes
+
+The test classes are organized by the application component or integration they cover:
+
+| Test class | What it does |
+| --- | --- |
+| `AppointmentTests` | Verifies appointment model validation, nullable values, and rejection of fields outside the extraction schema. |
+| `AppointmentsExtractorTests` | Tests email parsing, batch processing, provider errors, AI fallback, and prompt contents using mocked AI clients. |
+| `AppointmentsSheetTests` | Tests Google Sheets row creation, headers, duplicate prevention, error handling, and table configuration without calling Google Sheets. |
+| `AppointmentsSheetIntegrationTests` | Writes and reads a combined appointment row against a real test Google Sheet. |
+| `EmailClientTests` | Tests IMAP/SMTP connection handling, message parsing, sender filtering, replies, deletion, and folder moves with mocked mail servers. |
+| `EmailIntegrationTests` | Exercises fetching, completing, failing, and replying to messages through the email integration boundary. |
+| `GoogleAIStudioClientTests` | Verifies conversion of Google AI Studio responses into the requested Pydantic model using a mocked client. |
+| `GoogleAIStudioClientIntegrationTests` | Sends a structured-output request to the configured Google AI Studio API and validates the response. |
+| `LocalAIClientTests` | Verifies structured output handling through a mocked LM Studio/OpenAI-compatible endpoint. |
+| `LocalAIClientIntegrationTests` | Sends a structured-output request to a real local LM Studio model. |
+| `OpenRouterAIClientIntegrationTests` | Sends a structured-output request to the configured OpenRouter API and validates the response. |
+| `MainIntegrationTests` | Tests the main batch workflow orchestration, including successful processing and retry behavior after transient AI errors. |
+| `EndToEndIntegrationTests` | Runs the complete email-to-AI-to-Google-Sheets workflow and verifies the reply and processed-folder movement. |
+| `LocalAppointmentsExtractorIntegrationTests` | Processes sample appointment emails through the real local AI provider and validates extracted appointments. |
+| `GoogleAIStudioAppointmentsExtractorIntegrationTests` | Processes sample appointment emails through the real Google AI Studio provider and validates extracted appointments. |
+| `OpenRouterAppointmentsExtractorIntegrationTests` | Processes sample appointment emails through the real OpenRouter provider and validates extracted appointments. |
+
+### Application and support classes
+
+These are the non-test classes used by the application and its test fixtures:
+
+| Class | What it does |
+| --- | --- |
+| `Appointment` | Defines the validated appointment data model extracted from emails. |
+| `AIExtractionResponse` | Defines the structured response returned by an AI provider: an appointment or an extraction error. |
+| `ExtractionResult` | Groups an email with its extracted appointments and any processing error. |
+| `AppointmentsExtractor` | Builds extraction prompts, calls AI clients, parses responses, and falls back to the next provider when needed. |
+| `SheetsError` | Represents errors while writing appointment or email data to Google Sheets. |
+| `AppointmentsSheet` | Converts emails and appointments into rows and reads or appends them in the configured Google Sheets tables. |
+| `EmailItem` | Stores the normalized metadata and body of an email. |
+| `EmailClient` | Handles IMAP fetching, SMTP replies, sender filtering, deletion, and moving messages between folders. |
+| `AppointmentsEmailClient` | Provides appointment-specific email operations on top of `EmailClient`. |
+| `_TextHTMLParser` | Converts HTML email content into plain text for message parsing. |
+| `GoogleAIStudioClient` | Sends structured-output requests to Google AI Studio and validates the parsed response against a Pydantic model. |
+| `LocalAIError` | Represents HTTP or response-format errors from the local AI service. |
+| `LocalAIClient` | Sends structured-output requests to an OpenAI-compatible LM Studio endpoint. |
+| `OpenRouterError` | Represents HTTP or response-format errors from OpenRouter. |
+| `OpenRouterAIClient` | Sends structured-output requests to the OpenRouter API. |
+| `Config` | Stores the application configuration loaded from environment variables. |
+| `Logger` | Prints formatted informational and error messages. |
+| `ExpectedAppointment` | Defines the expected patient and study for a fixture assertion. |
+| `AppointmentFixture` | Bundles a sample email with its expected extracted appointments for integration tests. |
+| `HelloWorld` | Minimal Pydantic response model used by provider smoke tests to verify structured output. |
 
 ## Spreadsheet tables
 
@@ -177,12 +227,12 @@ The `Correos` worksheet stores the original processed email and its metadata.
 
 ```text
 app/
-  appointments_extractor.py  IA prompt, parsing, validation, and provider fallback
+  appointments_extractor.py  AI prompt, parsing, validation, and provider fallback
   appointments_sheet.py      Google Sheets integration
   config.py                   Environment configuration
   email_client.py             IMAP/SMTP integration
   main.py                     Application workflow
-  ia_clients/                 Gemini, OpenRouter, and LM Studio clients
+  ai_clients/                 Google AI Studio, OpenRouter, and LM Studio clients
 tests/                        Unit, integration, and E2E tests
 scripts/                      Spreadsheet setup utilities
 ```

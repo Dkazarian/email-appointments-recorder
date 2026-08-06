@@ -4,7 +4,7 @@ import unittest
 from pydantic import BaseModel
 
 from app.config import load_dotenv_file
-from app.ia_clients import OpenRouterIAClient
+from app.ai_clients import OpenRouterAIClient
 
 
 load_dotenv_file()
@@ -14,7 +14,7 @@ load_dotenv_file()
     os.getenv("RUN_OPENROUTER_INTEGRATION_TESTS") == "1",
     "Set RUN_OPENROUTER_INTEGRATION_TESTS=1 to use the real OpenRouter API",
 )
-class OpenRouterIAClientIntegrationTests(unittest.TestCase):
+class OpenRouterAIClientIntegrationTests(unittest.TestCase):
     def test_generate_structured_output_with_hello_world_schema(self):
         api_key = os.getenv("OPENROUTER_API_KEY")
         model_name = os.getenv("OPEN_ROUTER_MODEL")
@@ -24,7 +24,7 @@ class OpenRouterIAClientIntegrationTests(unittest.TestCase):
         class HelloWorld(BaseModel):
             message: str
 
-        client = OpenRouterIAClient(api_key, model_name)
+        client = OpenRouterAIClient(api_key, model_name)
 
         result = client.generate_structured_output(
             "Return a HelloWorld object with the message exactly 'Hello, world!'.",
