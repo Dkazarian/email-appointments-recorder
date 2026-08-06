@@ -24,8 +24,9 @@ class Appointment(BaseModel):
     date: str | None = Field(
         default=None,
         description=(
-            "Fecha del turno tal como aparece en el correo. Preferir DD/MM/YYYY; "
-            "si no aparece el año, conservar DD/MM."
+            "Fecha del turno. La entrada puede estar escrita en lenguaje natural "
+            "o en distintos formatos por el remitente; devolver normalizada como "
+            "DD/MM/YYYY. No usar la fecha de recepción del correo."
         ),
     )
     time: str | None = Field(

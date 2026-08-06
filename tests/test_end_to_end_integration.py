@@ -10,7 +10,7 @@ import gspread
 from gspread.exceptions import WorksheetNotFound
 
 from app.config import load_config, load_dotenv_file, load_google_credentials
-from app.email_client import EmailClient
+from app.email_client import AppointmentsEmailClient
 from app.ia_clients import GeminiIAClient, LocalIAClient, OpenRouterIAClient
 from app.main import run
 from tests.fixtures.appointment_emails import APPOINTMENT_FIXTURES
@@ -113,7 +113,7 @@ class EndToEndIntegrationTests(unittest.TestCase):
             self.assertIsNotNone(processed, f"The E2E email was not processed: {subject}")
             reply = self._wait_for_email(reply_subject, self.config.imap["folder"])
             self.assertIsNotNone(reply, f"The success reply was not received: {subject}")
-            self.assertIn("agregado correctamente", reply.body)
+            self.assertIn("agregados correctamente", reply.body)
 
             appointment_rows = self._wait_for_rows(
                 self.sheet,
@@ -199,7 +199,7 @@ class EndToEndIntegrationTests(unittest.TestCase):
             imap["folder"] = folder
         if search is not None:
             imap["search"] = search
-        return EmailClient(
+        return AppointmentsEmailClient(
             imap,
             self.config.smtp,
             self.config.processed_folder,

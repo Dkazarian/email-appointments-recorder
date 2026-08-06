@@ -37,22 +37,25 @@ def assert_fixture_extraction(
         process_emails_individually=process_emails_individually,
     )
     emails = [fixture.email for fixture in APPOINTMENT_FIXTURES]
-    extracted, failed = extractor.parse_all(emails)
+    results = extractor.parse_all(emails)
 
     print(
         f"\n{provider_name} extractor response:\n"
         + "\n".join(
-            f"{item.mail.uid}: {item.appointment.model_dump()}"
-            for item in extracted
+            f"{item.mail.uid}: {appointment.model_dump()}"
+            for item in results
+            for appointment in item.appointments
         )
     )
 
-    test_case.assertEqual(failed, [])
+    test_case.assertTrue(all(result.error is None for result in results))
     expected_total = sum(len(fixture.extracted) for fixture in APPOINTMENT_FIXTURES)
-    test_case.assertEqual(len(extracted), expected_total)
+    test_case.assertEqual(
+        sum(len(result.appointments) for result in results), expected_total
+    )
     appointments_by_email = {email.uid: [] for email in emails}
-    for item in extracted:
-        appointments_by_email[item.mail.uid].append(item.appointment)
+    for item in results:
+        appointments_by_email[item.mail.uid].extend(item.appointments)
 
     for fixture in APPOINTMENT_FIXTURES:
         actual = appointments_by_email[fixture.email.uid]

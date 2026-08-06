@@ -1,4 +1,6 @@
-﻿from typing import NamedTuple
+﻿from datetime import datetime
+from pathlib import Path
+from typing import NamedTuple
 from pydantic import BaseModel, Field
 from app.models import Appointment
 from app.email_client import EmailItem
@@ -18,50 +20,27 @@ class IAExtractionResponse(BaseModel):
     extracted_appointments: list[AppointmentExtracted] = Field(default_factory=list)
     failed_emails: list[ParsingError] = Field(default_factory=list)
 
-class SuccessItem(NamedTuple):
-    appointment: AppointmentExtracted
+class ExtractionResult(NamedTuple):
     mail: EmailItem
+    appointments: list[AppointmentExtracted]
+    error: str | None = None
 
-class FailedItem(NamedTuple):
-    error: str
-    mail: EmailItem
+
+SuccessItem = ExtractionResult
+FailedItem = ExtractionResult
 
 
 class AppointmentsExtractor:
+    _PROMPT_TEMPLATE = (
+        Path(__file__).with_name("prompts") / "appointments_extraction.txt"
+    ).read_text(encoding="utf-8")
+
     def __init__(self, ia_clients, process_emails_individually: bool = False):
         self.ia_clients = list(ia_clients) if isinstance(ia_clients, (list, tuple)) else [ia_clients]
         self.process_emails_individually = process_emails_individually
 
     def _build_batch_prompt(self, emails: list[EmailItem]) -> str:
-        prompt = (
-            "Analiza cada correo y devuelve exclusivamente el JSON definido por el esquema.\n\n"
-            "Para cada turno médico, agrega un objeto en 'extracted_appointments' y vincúlalo "
-            "con el 'email_id' exacto del correo. Si un correo contiene varios turnos, crea un "
-            "objeto por turno y repite el mismo 'email_id'.\n\n"
-            "Reglas de extracción:\n"
-            "- 'patient_name': si aparece 'Paciente: X', copia exactamente X.\n"
-            "  Si no aparece en el cuerpo, puedes usar el asunto como posible patient_name solo si "
-            "claramente parece contener un nombre; no lo des por seguro si el asunto es ambiguo.\n"
-            "- 'clinic_or_professional': usa la clínica, centro médico o profesional más relevante "
-            "Si aparece 'Clínica: X', copia el nombre del centro; si aparece "
-            "'Profesional: Lic. X', usa el nombre del profesional.\n"
-            "- 'study': usa el tipo breve del estudio.\n"
-            "- 'study_detail': conserva la descripción completa; si no hay detalle adicional, repite 'study'.\n"
-            "- 'date': es la fecha del turno, no la fecha del correo. Si aparece 'Fecha: DD/MM/YYYY', "
-            "DEBES copiar 'DD/MM/YYYY' en 'date'. Nunca devuelvas null para 'date' cuando una fecha "
-            "aparezca explícitamente en el contenido. Si falta el año, conserva 'DD/MM'.\n"
-            "- 'time': si aparece 'Hora: HH:MM', copia la hora en formato de 24 horas.\n"
-            "Extrae todos los campos presentes. Usa null únicamente cuando el dato no figure en el correo. "
-            "No inventes valores ni confundas la fecha del turno con la fecha de recepción del correo.\n\n"
-            "La fecha del turno es obligatoria: si no puedes identificarla, NO agregues un objeto en "
-            "'extracted_appointments'; agrega el correo en 'failed_emails' indicando que falta la fecha.\n\n"
-            "Ejemplo: para 'Clínica: Centro Norte; Fecha: 31/12/2026; Hora: 23:59', "
-            "la extracción debe contener 'clinic_or_professional': 'Centro Norte', 'date': '31/12/2026' y "
-            "'time': '23:59'.\n\n"
-            "Si un correo no contiene ningún turno médico o es imposible de procesar, agrega su "
-            "'email_id' y un motivo breve en 'failed_emails'. Cada email_id provisto debe aparecer "
-            "exactamente en una de las dos listas.\n\n"
-        )
+        prompt = self._PROMPT_TEMPLATE.replace("[year]", str(datetime.now().year))
         for mail in emails:
             prompt += f"=== INICIO CORREO ID: {mail.uid} ===\n"
             prompt += f"Asunto: {mail.subject}\n"
@@ -69,35 +48,25 @@ class AppointmentsExtractor:
             prompt += f"=== FIN CORREO ID: {mail.uid} ===\n\n"
         return prompt
 
-    def parse_all(self, emails: list[EmailItem]) -> tuple[list[SuccessItem], list[FailedItem]]:
+    def parse_all(self, emails: list[EmailItem]) -> list[ExtractionResult]:
         if len(emails) > 1 and self.process_emails_individually:
-            extracted_list: list[SuccessItem] = []
-            failed_list: list[FailedItem] = []
+            results: list[ExtractionResult] = []
             for email in emails:
-                extracted, failed = self._parse_batch([email])
-                extracted_list.extend(extracted)
-                failed_list.extend(failed)
-            return extracted_list, failed_list
-
+                results.extend(self._parse_batch([email]))
+            return results
         return self._parse_batch(emails)
 
-    def _parse_batch(self, emails: list[EmailItem]) -> tuple[list[SuccessItem], list[FailedItem]]:
-        extracted_list: list[SuccessItem] = []
-        failed_list: list[FailedItem] = []
-
+    def _parse_batch(self, emails: list[EmailItem]) -> list[ExtractionResult]:
         if not emails:
-            return extracted_list, failed_list
+            return []
 
-        email_map: dict[str, EmailItem] = {mail.uid: mail for mail in emails}
-
+        email_map = {mail.uid: mail for mail in emails}
         prompt = self._build_batch_prompt(emails)
-        
         last_error = None
         for ia_client in self.ia_clients:
             try:
-                gemini_result: IAExtractionResponse = ia_client.generate_structured_output(
-                    prompt=prompt,
-                    response_schema=IAExtractionResponse,
+                result: IAExtractionResponse = ia_client.generate_structured_output(
+                    prompt=prompt, response_schema=IAExtractionResponse
                 )
                 break
             except Exception as error:
@@ -107,52 +76,36 @@ class AppointmentsExtractor:
                 raise last_error
             raise RuntimeError("No IA clients configured")
 
+        appointments_by_uid = {email.uid: [] for email in emails}
+        errors_by_uid: dict[str, str] = {}
         undated_uids: set[str] = set()
-        extracted_uids: set[str] = set()
-        for appt in gemini_result.extracted_appointments:
-            original_mail = email_map.get(appt.email_id)
-            if original_mail is None and len(emails) == 1:
-                # Some local models fail to copy an opaque UID even when the
-                # batch contains only one email. The sole email is unambiguous.
-                original_mail = emails[0]
-            if original_mail:
-                if not appt.date or not appt.date.strip():
-                    undated_uids.add(original_mail.uid)
-                    continue
-                extracted_list.append(SuccessItem(appointment=appt, mail=original_mail))
-                extracted_uids.add(original_mail.uid)
+        for appointment in result.extracted_appointments:
+            mail = email_map.get(appointment.email_id)
+            if mail is None and len(emails) == 1:
+                mail = emails[0]
+            if mail is None:
+                continue
+            if not appointment.date or not appointment.date.strip():
+                undated_uids.add(mail.uid)
+            else:
+                appointments_by_uid[mail.uid].append(appointment)
 
-        explicitly_failed_uids: set[str] = set()
-        for failed_info in gemini_result.failed_emails:
-            original_mail = email_map.get(failed_info.email_id)
-            if original_mail is None and len(emails) == 1:
-                original_mail = emails[0]
-            if original_mail:
-                failed_list.append(FailedItem(error=failed_info.error_message, mail=original_mail))
-                explicitly_failed_uids.add(original_mail.uid)
+        for failure in result.failed_emails:
+            mail = email_map.get(failure.email_id)
+            if mail is None and len(emails) == 1:
+                mail = emails[0]
+            if mail is not None:
+                errors_by_uid[mail.uid] = failure.error_message
 
-        # An email can contain a valid dated appointment plus a follow-up
-        # study whose date will be coordinated later. Keep the dated result;
-        # only fail the email when no dated appointment was extracted.
         for uid in undated_uids:
-            if uid not in extracted_uids and uid not in explicitly_failed_uids:
-                failed_list.append(
-                    FailedItem(
-                        error="El turno no contiene una fecha identificable",
-                        mail=email_map[uid],
-                    )
-                )
+            if not appointments_by_uid[uid] and uid not in errors_by_uid:
+                errors_by_uid[uid] = "El turno no contiene una fecha identificable"
 
-        handled_uids = {item.mail.uid for item in extracted_list} | {
-            item.mail.uid for item in failed_list
-        }
+        results = []
         for email in emails:
-            if email.uid not in handled_uids:
-                failed_list.append(
-                    FailedItem(
-                        error="La IA no pudo vincular el resultado con este correo",
-                        mail=email,
-                    )
-                )
-
-        return extracted_list, failed_list
+            appointments = appointments_by_uid[email.uid]
+            error = errors_by_uid.get(email.uid)
+            if not appointments and error is None:
+                error = "La IA no pudo vincular el resultado con este correo"
+            results.append(ExtractionResult(email, appointments, error))
+        return results

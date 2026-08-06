@@ -8,7 +8,7 @@ from google.genai.errors import ServerError
 from .appointments_extractor import AppointmentsExtractor
 from .appointments_sheet import AppointmentsSheet
 from .config import load_config, load_google_credentials
-from .email_client import EmailClient
+from .email_client import AppointmentsEmailClient
 from .ia_clients import GeminiIAClient, LocalIAClient
 from .logger import Logger
 from .ia_clients import OpenRouterIAClient
@@ -17,31 +17,31 @@ from .ia_clients import OpenRouterIAClient
 def process_batch(email_client, extractor, sheets, logger) -> None:
     """Process one batch of emails."""
     emails = email_client.fetch()
-    extracted_appointments, failed_extractions = extractor.parse_all(emails)
+    logger.log_info(f"Found {len(emails)} email(s) to process.")
+    results = extractor.parse_all(emails)
 
-    sheets.add_appointments(
-        [(item.mail, item.appointment) for item in extracted_appointments]
-    )
+    for item in results:
 
-    for item in extracted_appointments:
-        email_client.reply_success(item.mail, item.appointment)
+        if item.error:
+            logger.log_error(f"{item.mail.uid}: {item.error}")
+            email_client.reply_failed(item.mail, item.error)
+            logger.log_error(f"Failed to extract appointment from email {item.mail.uid}: {item.error}")
+            email_client.mark_failed(item.mail)
+            continue
 
-    for item in failed_extractions:
-        logger.log_error(f"{item.mail.uid}: {item.error}")
-        email_client.reply_failed(item.mail, item.error)
+        sheets.add_appointments(
+            [(item.mail, appointment) for appointment in item.appointments]
+        )
+        email_client.mark_completed(item.mail)
 
-    failed_uids = {item.mail.uid for item in failed_extractions}
-    for email in emails:
-        if email.uid in failed_uids:
-            email_client.mark_failed(email)
-        else:
-            email_client.mark_completed(email)
+        email_client.reply_success(item.mail, item.appointments)
+        logger.log_info(f"Successfully processed email {item.mail.uid} and added {len(item.appointments)} appointment(s) to sheet.")
 
 
 def run(
     config: Any | None = None,
     *,
-    email_client_factory: Callable = EmailClient,
+    email_client_factory: Callable = AppointmentsEmailClient,
     extractor_factory: Callable = AppointmentsExtractor,
     gemini_ia_client_factory: Callable = GeminiIAClient,
     openrouter_ia_client_factory: Callable = OpenRouterIAClient,
@@ -114,6 +114,7 @@ def run(
         config.database["email_table_name"],
     )
     logger = logger_factory()
+    logger.log_info("Email appointments recorder started.")
 
     with email_client_factory(
         config.imap,
@@ -126,6 +127,7 @@ def run(
         cycles = 0
         while max_cycles is None or cycles < max_cycles:
             try:
+                logger.log_info("Checking mailbox...")
                 process_batch(email_client, extractor, sheets, logger)
             except ServerError as error:
                 if error.code == 503:
@@ -139,8 +141,15 @@ def run(
 
             cycles += 1
             if max_cycles is None or cycles < max_cycles:
+                logger.log_info(
+                    f"Waiting {config.interval_minutes} minute(s) before the next check..."
+                )
                 sleep(config.interval_minutes * 60)
 
 
 def main() -> None:
     run()
+
+
+if __name__ == "__main__":
+    main()

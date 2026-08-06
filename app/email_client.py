@@ -165,24 +165,6 @@ class EmailClient:
             raise RuntimeError(f"No se pudo eliminar el mail {uid}: {data}")
         imap.expunge()
 
-    def reply_success(self, email: EmailItem, appointment: Appointment) -> None:
-        self._send_reply(
-            email,
-            "El turno fue agregado correctamente a la planilla.\n\n"
-            f"Paciente: {appointment.patient_name or 'No identificado'}\n"
-            f"Estudio: {appointment.study or 'No identificado'}\n"
-            f"Detalle: {appointment.study_detail or 'No especificado'}\n"
-            f"Clínica / profesional: {appointment.clinic_or_professional or 'No identificado'}\n"
-            f"Fecha y hora: {' '.join(value for value in (appointment.date, appointment.time) if value) or 'No identificada'}\n",
-        )
-
-    def reply_failed(self, email: EmailItem, error: str) -> None:
-        self._send_reply(
-            email,
-            "No se pudo registrar el turno en la planilla.\n\n"
-            f"Motivo: {error}\n",
-        )
-
     def _send_reply(self, email: EmailItem, body: str) -> None:
         self.send(
             email.reply_to or email.sender,
@@ -342,3 +324,25 @@ class _TextHTMLParser(HTMLParser):
     def handle_endtag(self, tag: str) -> None:
         if tag.lower() == "blockquote" and self._quoted_depth:
             self._quoted_depth -= 1
+
+class AppointmentsEmailClient(EmailClient):
+    def reply_success(self, email: EmailItem, appointments: list[Appointment]) -> None:
+        self._send_reply(
+            email,
+            "Los siguientes turnos fueron agregados correctamente a la planilla.\n\n"
+            + "\n".join(
+                f"Paciente: {appointment.patient_name or 'No identificado'}\n"
+                f"Estudio: {appointment.study or 'No identificado'}\n"
+                f"Detalle: {appointment.study_detail or 'No especificado'}\n"
+                f"Clínica / profesional: {appointment.clinic_or_professional or 'No identificado'}\n"
+                f"Fecha y hora: {' '.join(value for value in (appointment.date, appointment.time) if value) or 'No identificada'}\n"
+                for appointment in appointments
+            )
+        )
+
+    def reply_failed(self, email: EmailItem, error: str) -> None:
+        self._send_reply(
+            email,
+            "No se pudo registrar el turno en la planilla.\n\n"
+            f"Motivo: {error}\n",
+        )

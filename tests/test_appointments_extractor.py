@@ -4,9 +4,8 @@ from unittest.mock import Mock
 from app.appointments_extractor import (
     AppointmentExtracted,
     AppointmentsExtractor,
-    FailedItem,
+    ExtractionResult,
     IAExtractionResponse,
-    SuccessItem,
 )
 from app.email_client import EmailItem
 
@@ -40,13 +39,13 @@ class AppointmentsExtractorTests(unittest.TestCase):
         )
         extractor = AppointmentsExtractor(ia_client)
 
-        extracted, failed = extractor.parse_all([self.mail])
+        results = extractor.parse_all([self.mail])
 
-        self.assertEqual(len(extracted), 1)
-        self.assertIsInstance(extracted[0], SuccessItem)
-        self.assertIs(extracted[0].mail, self.mail)
-        self.assertEqual(extracted[0].appointment.patient_name, "Ernesto")
-        self.assertEqual(failed, [])
+        self.assertEqual(len(results[0].appointments), 1)
+        self.assertIsInstance(results[0], ExtractionResult)
+        self.assertIs(results[0].mail, self.mail)
+        self.assertEqual(results[0].appointments[0].patient_name, "Ernesto")
+        self.assertIsNone(results[0].error)
         ia_client.generate_structured_output.assert_called_once()
 
     def test_prompt_includes_subject_for_missing_patient_names(self):
@@ -57,6 +56,8 @@ class AppointmentsExtractorTests(unittest.TestCase):
         self.assertIn("Asunto: Turno", prompt)
         self.assertIn("puedes usar el asunto como posible patient_name", prompt)
         self.assertIn("si el asunto es ambiguo", prompt)
+        self.assertIn("fechas escritas naturalmente por personas", prompt)
+        self.assertIn("31 de diciembre de 2026", prompt)
 
     def test_parse_all_maps_failures_back_to_emails(self):
         ia_client = Mock()
@@ -65,13 +66,11 @@ class AppointmentsExtractorTests(unittest.TestCase):
         )
         extractor = AppointmentsExtractor(ia_client)
 
-        extracted, failed = extractor.parse_all([self.mail])
+        result = extractor.parse_all([self.mail])[0]
 
-        self.assertEqual(extracted, [])
-        self.assertEqual(len(failed), 1)
-        self.assertIsInstance(failed[0], FailedItem)
-        self.assertEqual(failed[0].error, "Sin turno")
-        self.assertIs(failed[0].mail, self.mail)
+        self.assertEqual(result.appointments, [])
+        self.assertEqual(result.error, "Sin turno")
+        self.assertIs(result.mail, self.mail)
 
     def test_parse_all_rejects_appointments_without_date(self):
         ia_client = Mock()
@@ -87,15 +86,14 @@ class AppointmentsExtractorTests(unittest.TestCase):
         )
         extractor = AppointmentsExtractor(ia_client)
 
-        extracted, failed = extractor.parse_all([self.mail])
+        result = extractor.parse_all([self.mail])[0]
 
-        self.assertEqual(extracted, [])
-        self.assertEqual(len(failed), 1)
+        self.assertEqual(result.appointments, [])
         self.assertEqual(
-            failed[0].error,
+            result.error,
             "El turno no contiene una fecha identificable",
         )
-        self.assertIs(failed[0].mail, self.mail)
+        self.assertIs(result.mail, self.mail)
 
     def test_parse_all_maps_unknown_id_to_sole_email(self):
         ia_client = Mock()
@@ -111,11 +109,11 @@ class AppointmentsExtractorTests(unittest.TestCase):
         )
         extractor = AppointmentsExtractor(ia_client)
 
-        extracted, failed = extractor.parse_all([self.mail])
+        result = extractor.parse_all([self.mail])[0]
 
-        self.assertEqual(len(extracted), 1)
-        self.assertIs(extracted[0].mail, self.mail)
-        self.assertEqual(failed, [])
+        self.assertEqual(len(result.appointments), 1)
+        self.assertIs(result.mail, self.mail)
+        self.assertIsNone(result.error)
 
     def test_parse_all_processes_each_email_individually_for_marked_ia(self):
         ia_client = Mock()
@@ -131,10 +129,10 @@ class AppointmentsExtractorTests(unittest.TestCase):
         )
         extractor = AppointmentsExtractor(ia_client, process_emails_individually=True)
 
-        extracted, failed = extractor.parse_all([self.mail, self.mail])
+        results = extractor.parse_all([self.mail, self.mail])
 
-        self.assertEqual(len(extracted), 2)
-        self.assertEqual(failed, [])
+        self.assertEqual(len(results), 2)
+        self.assertTrue(all(result.error is None for result in results))
         self.assertEqual(ia_client.generate_structured_output.call_count, 2)
 
     def test_parse_all_uses_next_ia_client_when_first_one_fails(self):
@@ -148,10 +146,10 @@ class AppointmentsExtractorTests(unittest.TestCase):
         )
         extractor = AppointmentsExtractor([unavailable_client, fallback_client])
 
-        extracted, failed = extractor.parse_all([self.mail])
+        result = extractor.parse_all([self.mail])[0]
 
-        self.assertEqual(extracted, [])
-        self.assertEqual(failed[0].error, "Sin turno")
+        self.assertEqual(result.appointments, [])
+        self.assertEqual(result.error, "Sin turno")
         unavailable_client.generate_structured_output.assert_called_once()
         fallback_client.generate_structured_output.assert_called_once()
 

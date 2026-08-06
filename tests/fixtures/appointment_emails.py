@@ -118,6 +118,26 @@ APPOINTMENT_FIXTURES = [
         ),
         extracted=(ExpectedAppointment("Tomás Alejandro Martínez", "RMN"),),
     ),
+    AppointmentFixture(
+        email=EmailItem(
+            uid="email-7", url=None, sender="secretaria@example.com",
+            reply_to="secretaria@example.com", recipients=[],
+            subject="BUGS BUNNY - DNI: 12.345.678", sent_at=None,
+            body=(
+                "PSICO: 3/8\n"
+                "Horario: 13.20 hs\n"
+                "Profesional: Lic. Maria\n"
+                "Dirección: Segurola 1234 CABA\n"
+                "\n"
+                "MODALIDAD VIRTUAL (plataforma Google Meet)\n"
+                "Área de Coordinación de Psicologia\n"
+                "\n"
+                "Saludos\n"
+                "Lu"
+            ),
+        ),
+        extracted=(ExpectedAppointment("BUGS BUNNY", "PSICO"),),
+    ),
 ]
 
 EMAILS = [fixture.email for fixture in APPOINTMENT_FIXTURES]

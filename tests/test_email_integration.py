@@ -4,7 +4,7 @@ import unittest
 import uuid
 
 from app.config import load_config
-from app.email_client import EmailClient
+from app.email_client import AppointmentsEmailClient
 from app.models import Appointment
 
 
@@ -58,7 +58,7 @@ class EmailIntegrationTests(unittest.TestCase):
 
         reply = self._wait_for_email(reply_subject, self.config.imap["folder"])
         self.assertIsNotNone(reply)
-        self.assertIn("agregado correctamente", reply.body)
+        self.assertIn("agregados correctamente", reply.body)
 
     def test_reply_failed(self):
         subject = self._subject("reply-failed")
@@ -130,7 +130,7 @@ class EmailIntegrationTests(unittest.TestCase):
             imap["folder"] = folder
         if search is not None:
             imap["search"] = search
-        return EmailClient(
+        return AppointmentsEmailClient(
             imap,
             self.config.smtp,
             self.config.processed_folder,

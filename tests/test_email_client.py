@@ -3,7 +3,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, call, patch
 
-from app.email_client import EmailClient, EmailItem
+from app.email_client import AppointmentsEmailClient, EmailClient, EmailItem
 
 
 IMAP = {
@@ -26,6 +26,10 @@ def client(allowed_senders=None) -> EmailClient:
     return EmailClient(IMAP, SMTP, "Processed", "Failed", allowed_senders)
 
 
+def appointments_client(allowed_senders=None) -> AppointmentsEmailClient:
+    return AppointmentsEmailClient(IMAP, SMTP, "Processed", "Failed", allowed_senders)
+
+
 class EmailClientTests(unittest.TestCase):
     @patch("app.email_client.imaplib.IMAP4_SSL")
     def test_context_manager_connects_and_disconnects(self, imap_class):
@@ -46,7 +50,7 @@ class EmailClientTests(unittest.TestCase):
             client().fetch(1)
 
     def test_fetch_parses_headers_and_prefers_plain_text(self):
-        email_client = client()
+        email_client = appointments_client()
         imap = Mock()
         email_client._imap = imap
         raw = (
@@ -85,7 +89,7 @@ class EmailClientTests(unittest.TestCase):
         self.assertEqual(imap.uid.call_args_list[0], call("search", None, "UNSEEN"))
 
     def test_fetch_uses_html_as_fallback_and_honors_limit(self):
-        email_client = client()
+        email_client = appointments_client()
         imap = Mock()
         email_client._imap = imap
         raw = b"From: sender@example.com\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<p>Hello</p><br>world"
@@ -113,7 +117,7 @@ class EmailClientTests(unittest.TestCase):
         self.assertEqual([mail.sender for mail in result], ["allowed@example.com"])
 
     def test_fetch_strips_gmail_quoted_conversation_from_body(self):
-        email_client = client()
+        email_client = appointments_client()
         imap = Mock()
         email_client._imap = imap
         raw = (
@@ -159,7 +163,7 @@ class EmailClientTests(unittest.TestCase):
                 self.assertEqual(result[0].body, "new reply")
 
     def test_fetch_ignores_appended_files(self):
-        email_client = client()
+        email_client = appointments_client()
         imap = Mock()
         email_client._imap = imap
         raw = (
@@ -243,7 +247,7 @@ class EmailClientTests(unittest.TestCase):
 
     @patch("app.email_client.smtplib.SMTP_SSL")
     def test_reply_success_sends_confirmation_to_reply_to(self, smtp_class):
-        email_client = client()
+        email_client = appointments_client()
         email = EmailItem(
             uid="42",
             url=None,
@@ -262,18 +266,18 @@ class EmailClientTests(unittest.TestCase):
             time="15:55",
         )
 
-        email_client.reply_success(email, appointment)
+        email_client.reply_success(email, [appointment])
 
         smtp = smtp_class.return_value.__enter__.return_value
         smtp.login.assert_called_once_with("smtp-user", "smtp-secret")
         sent_message = smtp.send_message.call_args.args[0]
         self.assertEqual(sent_message["To"], "reply@example.com")
         self.assertEqual(sent_message["Subject"], "Re: Turno")
-        self.assertIn("agregado correctamente", sent_message.get_content())
+        self.assertIn("agregados correctamente", sent_message.get_content())
 
     @patch("app.email_client.smtplib.SMTP_SSL")
     def test_reply_failed_reports_error(self, smtp_class):
-        email_client = client()
+        email_client = appointments_client()
         email = EmailItem(
             uid="42",
             url=None,
