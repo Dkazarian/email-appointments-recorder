@@ -139,6 +139,38 @@ class EndToEndIntegrationTests(unittest.TestCase):
             self._clean_emails(subjects)
             self._clean_sheet_rows(subjects)
 
+    def _clean_emails(self, subjects):
+        for folder in {
+            self.config.imap["folder"],
+            self.config.processed_folder,
+            self.config.failed_folder,
+        }:
+            try:
+                with self._client(folder=folder, search="ALL") as client:
+                    for email in client.fetch(100):
+                        if email.subject in subjects:
+                            client.delete(email)
+            except Exception:
+                # Cleanup must not hide the original test failure.
+                pass
+
+    def _clean_sheet_rows(self, subjects):
+        for table_name in (
+            self.config.database["table_name"],
+            self.config.database["email_table_name"],
+        ):
+            try:
+                rows = self.sheets.get_rows(table_name)
+                row_numbers = [
+                    index
+                    for index, row in enumerate(rows, start=1)
+                    if any(self._row_contains(row, subject) for subject in subjects)
+                ]
+                self.sheets.delete_rows(row_numbers, table_name)
+            except Exception:
+                # Cleanup must not hide the original test failure.
+                pass
+
 
     def _printing_ai_client_factory(self):
         client_factories = {
@@ -220,33 +252,6 @@ class EndToEndIntegrationTests(unittest.TestCase):
             time.sleep(2)
         return None
 
-    def _clean_emails(self, subjects):
-        for folder in {
-            self.config.imap["folder"],
-            self.config.processed_folder,
-            self.config.failed_folder,
-        }:
-            try:
-                with self._client(folder=folder, search="ALL") as client:
-                    for email in client.fetch(100):
-                        if email.subject in subjects:
-                            client.delete(email)
-            except Exception:
-                # Cleanup must not hide the original test failure.
-                pass
-
-    def _clean_sheet_rows(self, subjects):
-        for table_name in (
-            self.config.database["table_name"],
-            self.config.database["email_table_name"],
-        ):
-            rows = self.sheets.get_rows(table_name)
-            row_numbers = [
-                index
-                for index, row in enumerate(rows, start=1)
-                if any(self._row_contains(row, subject) for subject in subjects)
-            ]
-            self.sheets.delete_rows(row_numbers, table_name)
 
     @classmethod
     def _load_config(cls):

@@ -3,6 +3,16 @@ import json
 import os
 from pathlib import Path
 
+
+def _get_env(*names: str, default: str | None = None) -> str | None:
+    """Read the first configured variable, supporting the previous names."""
+    for name in names:
+        value = os.getenv(name)
+        if value is not None:
+            return value
+    return default
+
+
 @dataclass(frozen=True)
 class Config:
     imap: object
@@ -54,14 +64,30 @@ def load_config() -> Config:
             "email_table_name": os.getenv("SHEET_EMAIL_TABLE", "Correos"),
             "sheet_tab": os.getenv("SHEET_TAB", "Turnos"),
         },
-        google_ai_studio_api_key=os.getenv("GOOGLE_AI_STUDIO_API_KEY"),
-        google_ai_studio_model=os.getenv("GOOGLE_AI_STUDIO_MODEL", "gemini-2.0-flash"),
+        google_ai_studio_api_key=_get_env(
+            "GOOGLE_AI_STUDIO_API_KEY", "GOOGLE_STUDIO_AI_API_KEY", "GEMINI_IA_API_KEY"
+        ),
+        google_ai_studio_model=_get_env(
+            "GOOGLE_AI_STUDIO_MODEL",
+            "GOOGLE_STUDIO_AI_MODEL",
+            "GEMINI_IA_MODEL",
+            default="gemini-2.0-flash",
+        ),
         openrouter_api_key=os.getenv("OPENROUTER_API_KEY"),
         open_router_model=os.getenv("OPEN_ROUTER_MODEL"),
-        local_ai_enabled=os.getenv("LOCAL_AI_ENABLED", "false").lower() == "true",
-        local_ai_base_url=os.getenv("LOCAL_AI_BASE_URL", "http://localhost:1234/v1"),
-        local_ai_model=os.getenv("LOCAL_AI_MODEL", "google_gemma-3-4b-it"),
-        local_ai_timeout_seconds=int(os.getenv("LOCAL_AI_TIMEOUT_SECONDS", "300")),
+        local_ai_enabled=_get_env(
+            "LOCAL_AI_ENABLED", "LOCAL_IA_ENABLED", default="false"
+        ).lower()
+        == "true",
+        local_ai_base_url=_get_env(
+            "LOCAL_AI_BASE_URL", "LOCAL_IA_BASE_URL", default="http://localhost:1234/v1"
+        ),
+        local_ai_model=_get_env(
+            "LOCAL_AI_MODEL", "LOCAL_IA_MODEL", default="google_gemma-3-4b-it"
+        ),
+        local_ai_timeout_seconds=int(
+            _get_env("LOCAL_AI_TIMEOUT_SECONDS", "LOCAL_IA_TIMEOUT_SECONDS", default="300")
+        ),
         interval_minutes=int(os.getenv("INTERVAL_MINUTES")),
         mail_web_base_url=os.getenv(
             "MAIL_WEB_BASE_URL", "https://mail.google.com/mail/u/0"

@@ -73,6 +73,24 @@ class EmailIntegrationTests(unittest.TestCase):
         self.assertIsNotNone(reply)
         self.assertIn("No contiene fecha", reply.body)
 
+    def test_reply_success_includes_multiple_appointments(self):
+        subject = self._subject("reply-success-multiple")
+        reply_subject = f"Re: {subject}"
+        self.addCleanup(self._clean_emails, subject, reply_subject)
+        email = self._seed_email(subject)
+        appointments = [
+            Appointment(patient_name="Ana", study="Laboratorio"),
+            Appointment(patient_name="Ana", study="Radiografía"),
+        ]
+
+        with self._client() as client:
+            client.reply_success(email, appointments)
+
+        reply = self._wait_for_email(reply_subject, self.config.imap["folder"])
+        self.assertIsNotNone(reply)
+        self.assertIn("Estudio: Laboratorio", reply.body)
+        self.assertIn("Estudio: Radiografía", reply.body)
+
     def _seed_email(self, subject):
         self._client().send(
             self.config.imap["username"],
