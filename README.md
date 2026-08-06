@@ -166,7 +166,7 @@ The `Turnos` worksheet stores appointment records, including:
 
 - patient
 - study and detail
-- clinic
+- clinic_or_professional
 - appointment date and time
 - email UID and email date
 - subject, sender, recipients, and URL
@@ -186,5 +186,3 @@ app/
 tests/                        Unit, integration, and E2E tests
 scripts/                      Spreadsheet setup utilities
 ```
-
-This README is an initial draft and should be refined as deployment and operational conventions are finalized.

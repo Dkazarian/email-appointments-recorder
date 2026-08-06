@@ -4,7 +4,7 @@ import unittest
 from app.config import load_dotenv_file
 from app.ia_clients import GeminiIAClient
 
-from .common import assert_two_email_extraction
+from .common import assert_fixture_extraction
 
 load_dotenv_file()
 
@@ -19,7 +19,7 @@ class GeminiAppointmentsExtractorIntegrationTests(unittest.TestCase):
         model_name = os.getenv("GEMINI_IA_MODEL")
         self.assertTrue(api_key, "GEMINI_IA_API_KEY must be configured")
         self.assertTrue(model_name, "GEMINI_IA_MODEL must be configured")
-        assert_two_email_extraction(
+        assert_fixture_extraction(
             self,
             "Gemini",
             GeminiIAClient(api_key, model_name),

@@ -257,7 +257,7 @@ class EmailClientTests(unittest.TestCase):
         appointment = Mock(
             patient_name="Ernesto",
             study="Radiografia",
-            clinic="Clinica Rosa",
+            clinic_or_professional="Clinica Rosa",
             date="24/3",
             time="15:55",
         )

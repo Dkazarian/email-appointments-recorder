@@ -86,7 +86,7 @@ class AppointmentsSheetIntegrationTests(unittest.TestCase):
         appointment = Appointment(
             patient_name=marker,
             study="Radiografía de prueba",
-            clinic="Clínica de integración",
+            clinic_or_professional="Clínica de integración",
             date="31/12/2099",
             time="23:59:00",
         )

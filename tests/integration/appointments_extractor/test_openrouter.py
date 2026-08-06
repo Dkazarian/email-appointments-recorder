@@ -4,7 +4,7 @@ import unittest
 from app.config import load_dotenv_file
 from app.ia_clients import OpenRouterIAClient
 
-from .common import assert_two_email_extraction
+from .common import assert_fixture_extraction
 
 load_dotenv_file()
 
@@ -19,7 +19,7 @@ class OpenRouterAppointmentsExtractorIntegrationTests(unittest.TestCase):
         model_name = os.getenv("OPEN_ROUTER_MODEL")
         self.assertTrue(api_key, "OPENROUTER_API_KEY must be configured")
         self.assertTrue(model_name, "OPEN_ROUTER_MODEL must be configured")
-        assert_two_email_extraction(
+        assert_fixture_extraction(
             self,
             "OpenRouter",
             OpenRouterIAClient(api_key, model_name),

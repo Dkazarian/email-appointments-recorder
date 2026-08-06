@@ -23,7 +23,7 @@ class AppointmentsSheetTests(unittest.TestCase):
             patient_name="Ernesto",
             study="Radiografia",
             study_detail="Radiografia mano izquierda",
-            clinic="Clinica Rosa",
+            clinic_or_professional="Clinica Rosa",
             date="24/03/2025",
             time="15:55",
         )

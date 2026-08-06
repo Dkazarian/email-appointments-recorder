@@ -42,8 +42,9 @@ class AppointmentsExtractor:
             "- 'patient_name': si aparece 'Paciente: X', copia exactamente X.\n"
             "  Si no aparece en el cuerpo, puedes usar el asunto como posible patient_name solo si "
             "claramente parece contener un nombre; no lo des por seguro si el asunto es ambiguo.\n"
-            "- 'clinic': si aparece 'Clínica: X' o una variante con problemas de codificación como "
-            "'ClÃ­nica: X', copia exactamente el nombre de la clínica.\n"
+            "- 'clinic_or_professional': usa la clínica, centro médico o profesional más relevante "
+            "Si aparece 'Clínica: X', copia el nombre del centro; si aparece "
+            "'Profesional: Lic. X', usa el nombre del profesional.\n"
             "- 'study': usa el tipo breve del estudio.\n"
             "- 'study_detail': conserva la descripción completa; si no hay detalle adicional, repite 'study'.\n"
             "- 'date': es la fecha del turno, no la fecha del correo. Si aparece 'Fecha: DD/MM/YYYY', "
@@ -55,7 +56,7 @@ class AppointmentsExtractor:
             "La fecha del turno es obligatoria: si no puedes identificarla, NO agregues un objeto en "
             "'extracted_appointments'; agrega el correo en 'failed_emails' indicando que falta la fecha.\n\n"
             "Ejemplo: para 'Clínica: Centro Norte; Fecha: 31/12/2026; Hora: 23:59', "
-            "la extracción debe contener 'clinic': 'Centro Norte', 'date': '31/12/2026' y "
+            "la extracción debe contener 'clinic_or_professional': 'Centro Norte', 'date': '31/12/2026' y "
             "'time': '23:59'.\n\n"
             "Si un correo no contiene ningún turno médico o es imposible de procesar, agrega su "
             "'email_id' y un motivo breve en 'failed_emails'. Cada email_id provisto debe aparecer "
@@ -106,6 +107,8 @@ class AppointmentsExtractor:
                 raise last_error
             raise RuntimeError("No IA clients configured")
 
+        undated_uids: set[str] = set()
+        extracted_uids: set[str] = set()
         for appt in gemini_result.extracted_appointments:
             original_mail = email_map.get(appt.email_id)
             if original_mail is None and len(emails) == 1:
@@ -114,21 +117,31 @@ class AppointmentsExtractor:
                 original_mail = emails[0]
             if original_mail:
                 if not appt.date or not appt.date.strip():
-                    failed_list.append(
-                        FailedItem(
-                            error="El turno no contiene una fecha identificable",
-                            mail=original_mail,
-                        )
-                    )
+                    undated_uids.add(original_mail.uid)
                     continue
                 extracted_list.append(SuccessItem(appointment=appt, mail=original_mail))
+                extracted_uids.add(original_mail.uid)
 
+        explicitly_failed_uids: set[str] = set()
         for failed_info in gemini_result.failed_emails:
             original_mail = email_map.get(failed_info.email_id)
             if original_mail is None and len(emails) == 1:
                 original_mail = emails[0]
             if original_mail:
                 failed_list.append(FailedItem(error=failed_info.error_message, mail=original_mail))
+                explicitly_failed_uids.add(original_mail.uid)
+
+        # An email can contain a valid dated appointment plus a follow-up
+        # study whose date will be coordinated later. Keep the dated result;
+        # only fail the email when no dated appointment was extracted.
+        for uid in undated_uids:
+            if uid not in extracted_uids and uid not in explicitly_failed_uids:
+                failed_list.append(
+                    FailedItem(
+                        error="El turno no contiene una fecha identificable",
+                        mail=email_map[uid],
+                    )
+                )
 
         handled_uids = {item.mail.uid for item in extracted_list} | {
             item.mail.uid for item in failed_list

@@ -172,7 +172,7 @@ class EmailClient:
             f"Paciente: {appointment.patient_name or 'No identificado'}\n"
             f"Estudio: {appointment.study or 'No identificado'}\n"
             f"Detalle: {appointment.study_detail or 'No especificado'}\n"
-            f"Clínica: {appointment.clinic or 'No identificada'}\n"
+            f"Clínica / profesional: {appointment.clinic_or_professional or 'No identificado'}\n"
             f"Fecha y hora: {' '.join(value for value in (appointment.date, appointment.time) if value) or 'No identificada'}\n",
         )
 

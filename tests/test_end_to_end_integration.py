@@ -1,6 +1,7 @@
 import os
 import time
 import unittest
+import unicodedata
 import uuid
 from dataclasses import replace
 from pathlib import Path
@@ -12,6 +13,7 @@ from app.config import load_config, load_dotenv_file, load_google_credentials
 from app.email_client import EmailClient
 from app.ia_clients import GeminiIAClient, LocalIAClient, OpenRouterIAClient
 from app.main import run
+from tests.fixtures.appointment_emails import APPOINTMENT_FIXTURES
 
 
 @unittest.skipUnless(
@@ -64,72 +66,87 @@ class EndToEndIntegrationTests(unittest.TestCase):
 
     def test_email_to_selected_ia_to_sheets_and_reply(self):
         marker = uuid.uuid4().hex[:12]
-        subject = f"E2E-turno-{marker}"
-        body = (
-            f"Pablo Gonzalez {marker}\n"
-            "Radiografia mano izquierda\n"
-            "Clinica E2E\n"
-            "27/12/2026 14:30"
-        )
-        reply_subject = f"Re: {subject}"
-        self.addCleanup(self._cleanup_test_data, subject, reply_subject, marker)
+        subjects = [
+            f"{self._ascii_subject(fixture.email.subject)} [E2E-{marker}-{index}]"
+            for index, fixture in enumerate(APPOINTMENT_FIXTURES[2:])
+        ]
+        reply_subjects = [f"Re: {subject}" for subject in subjects]
 
-        self._send_email(subject, body)
-        received = self._wait_for_email(subject, self.config.imap["folder"])
-        self.assertIsNotNone(received, "The E2E email was not received")
-
-        test_config = replace(
-            self.config,
-            local_ia_enabled=self.ia_provider == "local",
-            imap={
-                **self.config.imap,
-                "search": f'HEADER Subject "{subject}"',
-            },
-            allowed_senders=self.config.allowed_senders
-            | {self.config.smtp["username"].lower()},
-        )
-        run(
-            config=test_config,
-            max_cycles=1,
-            sleep=lambda _: None,
-            **{
-                f"{self.ia_provider}_ia_client_factory": self._printing_ia_client_factory()
-            },
-            ia_provider=self.ia_provider,
+        self.addCleanup(
+            self._cleanup_test_data,
+            *[value for pair in zip(subjects, reply_subjects) for value in pair],
+            marker,
         )
 
-        processed = self._wait_for_email(subject, self.config.processed_folder)
-        self.assertIsNotNone(processed, "The E2E email was not moved to processed")
-        reply = self._wait_for_email(reply_subject, self.config.imap["folder"])
-        self.assertIsNotNone(reply, "The success reply was not received")
-        self.assertIn("agregado correctamente", reply.body)
+        # Process each real-world-shaped example separately so the E2E run
+        # exercises subject-based patient names and multi-study messages.
+        for fixture, subject, reply_subject in zip(
+            APPOINTMENT_FIXTURES[2:], subjects, reply_subjects
+        ):
+            mail = fixture.email
+            expected_count = len(fixture.extracted)
+            self._send_email(subject, mail.body)
+            received = self._wait_for_email(subject, self.config.imap["folder"])
+            self.assertIsNotNone(received, f"The E2E email was not received: {subject}")
 
-        appointment_rows = self._wait_for_rows(
-            self.sheet,
-            lambda row: self._row_contains(row, marker, subject),
-        )
-        self.assertEqual(len(appointment_rows), 1)
-        self.assertEqual(appointment_rows[0][0], "Pablo Gonzalez")
-        self.assertEqual(appointment_rows[0][1], "Radiografia")
-        self.assertEqual(appointment_rows[0][2], "mano izquierda")
-        self.assertEqual(appointment_rows[0][3], "Clinica E2E")
-        self.assertEqual(appointment_rows[0][4], "27/12/2026")
-        self.assertEqual(appointment_rows[0][5], "14:30:00")
+            test_config = replace(
+                self.config,
+                local_ia_enabled=self.ia_provider == "local",
+                imap={
+                    **self.config.imap,
+                    "search": f'HEADER Subject "{subject}"',
+                },
+                allowed_senders=self.config.allowed_senders
+                | {self.config.smtp["username"].lower()},
+            )
+            run(
+                config=test_config,
+                max_cycles=1,
+                sleep=lambda _: None,
+                **{
+                    f"{self.ia_provider}_ia_client_factory": self._printing_ia_client_factory()
+                },
+                ia_provider=self.ia_provider,
+            )
 
-        email_rows = self._wait_for_rows(
-            self.email_sheet,
-            lambda row: self._row_contains(row, marker, subject),
-        )
-        self.assertEqual(len(email_rows), 1)
-        self.assertTrue(email_rows[0][5], "The email URL was not populated")
-        self.assertTrue(appointment_rows[0][13], "The appointment URL was not populated")
-        stored_body = email_rows[0][-1].replace("\r\n", "\n")
-        self.assertIn(body, stored_body)
+            processed = self._wait_for_email(subject, self.config.processed_folder)
+            self.assertIsNotNone(processed, f"The E2E email was not processed: {subject}")
+            reply = self._wait_for_email(reply_subject, self.config.imap["folder"])
+            self.assertIsNotNone(reply, f"The success reply was not received: {subject}")
+            self.assertIn("agregado correctamente", reply.body)
 
-    def _cleanup_test_data(self, subject, reply_subject, marker):
+            appointment_rows = self._wait_for_rows(
+                self.sheet,
+                lambda row: self._row_contains(row, marker, subject),
+            )
+            self.assertEqual(len(appointment_rows), expected_count)
+            self.assertTrue(
+                all(row[13] for row in appointment_rows),
+                "An appointment URL was not populated",
+            )
+
+            email_rows = self._wait_for_rows(
+                self.email_sheet,
+                lambda row: self._row_contains(row, marker, subject),
+            )
+            self.assertEqual(len(email_rows), 1)
+            self.assertTrue(email_rows[0][5], "The email URL was not populated")
+            stored_body = email_rows[0][-1].replace("\r\n", "\n")
+            self.assertIn(mail.body, stored_body)
+
+    def _cleanup_test_data(self, *values):
+        marker = values[-1]
+        subject_pairs = zip(values[:-1:2], values[1:-1:2])
         if os.getenv("KEEP_END_TO_END_DATA") != "1":
-            self._clean_emails(subject, reply_subject)
+            self._clean_emails(
+                *(subject for pair in subject_pairs for subject in pair)
+            )
             self._clean_sheet_rows(marker)
+
+    @staticmethod
+    def _ascii_subject(subject):
+        normalized = unicodedata.normalize("NFKD", subject)
+        return normalized.encode("ascii", "ignore").decode("ascii").replace("–", "-")
 
     def _printing_ia_client_factory(self):
         client_factories = {

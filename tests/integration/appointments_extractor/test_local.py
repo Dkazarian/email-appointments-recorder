@@ -3,7 +3,7 @@ import unittest
 
 from app.ia_clients.lm_studio import LocalIAClient
 
-from .common import assert_two_email_extraction
+from .common import assert_fixture_extraction
 
 
 @unittest.skipUnless(
@@ -17,7 +17,7 @@ class LocalAppointmentsExtractorIntegrationTests(unittest.TestCase):
             os.getenv("LOCAL_IA_MODEL", "google_gemma-3-4b-it"),
             int(os.getenv("LOCAL_IA_TIMEOUT_SECONDS", "120")),
         )
-        assert_two_email_extraction(
+        assert_fixture_extraction(
             self,
             "Local LM Studio",
             client,
